@@ -1,0 +1,277 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="bi bi-clock-history"></i> {{ title }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        {% if device %}
+        <a href="{{ url_for('device.view_device', device_id=device.id) }}" class="btn btn-outline-secondary me-2">Volver
+            al Equipo</a>
+        {% else %}
+        <a href="{{ url_for('policy.list_policies') }}" class="btn btn-outline-secondary me-2">Volver</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- VDOM Filter -->
+{% if distinct_vdoms and distinct_vdoms|length > 1 %}
+<div class="card mb-4 shadow-sm border-0">
+    <div class="card-body">
+        <div class="row align-items-center mb-3">
+            <div class="col-md-3">
+                <label class="form-label fw-bold mb-0"><i class="bi bi-funnel"></i> Filtrar por VDOM:</label>
+            </div>
+            <div class="col-md-9">
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('history.device_history', device_id=device.id, change_type=current_change_type) }}"
+                        class="btn btn-sm {% if not current_vdom %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        Todos
+                    </a>
+                    {% for vdom in distinct_vdoms %}
+                    <a href="{{ url_for('history.device_history', device_id=device.id, vdom=vdom, change_type=current_change_type) }}"
+                        class="btn btn-sm {% if current_vdom == vdom %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        {{ vdom }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="row align-items-center">
+            <div class="col-md-3">
+                <label class="form-label fw-bold mb-0"><i class="bi bi-filter-circle"></i> Filtrar por Tipo:</label>
+            </div>
+            <div class="col-md-9">
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('history.device_history', device_id=device.id, vdom=current_vdom) }}"
+                        class="btn btn-sm {% if not current_change_type %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                        Todos
+                    </a>
+                    <a href="{{ url_for('history.device_history', device_id=device.id, vdom=current_vdom, change_type='create') }}"
+                        class="btn btn-sm {% if current_change_type == 'create' %}btn-success{% else %}btn-outline-success{% endif %}">
+                        <i class="bi bi-plus-circle"></i> Creado
+                    </a>
+                    <a href="{{ url_for('history.device_history', device_id=device.id, vdom=current_vdom, change_type='modify') }}"
+                        class="btn btn-sm {% if current_change_type == 'modify' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                        <i class="bi bi-pencil-square"></i> Modificado
+                    </a>
+                    <a href="{{ url_for('history.device_history', device_id=device.id, vdom=current_vdom, change_type='delete') }}"
+                        class="btn btn-sm {% if current_change_type == 'delete' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                        <i class="bi bi-trash"></i> Eliminado
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- Change Type filter when no VDOM filter -->
+<div class="card mb-4 shadow-sm border-0">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-3">
+                <label class="form-label fw-bold mb-0"><i class="bi bi-filter-circle"></i> Filtrar por Tipo:</label>
+            </div>
+            <div class="col-md-9">
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('history.device_history', device_id=device.id) }}"
+                        class="btn btn-sm {% if not current_change_type %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                        Todos
+                    </a>
+                    <a href="{{ url_for('history.device_history', device_id=device.id, change_type='create') }}"
+                        class="btn btn-sm {% if current_change_type == 'create' %}btn-success{% else %}btn-outline-success{% endif %}">
+                        <i class="bi bi-plus-circle"></i> Creado
+                    </a>
+                    <a href="{{ url_for('history.device_history', device_id=device.id, change_type='modify') }}"
+                        class="btn btn-sm {% if current_change_type == 'modify' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                        <i class="bi bi-pencil-square"></i> Modificado
+                    </a>
+                    <a href="{{ url_for('history.device_history', device_id=device.id, change_type='delete') }}"
+                        class="btn btn-sm {% if current_change_type == 'delete' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                        <i class="bi bi-trash"></i> Eliminado
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            {% if not sessions %}
+            <div class="alert alert-info py-5 text-center">
+                <i class="bi bi-info-circle display-4 mb-3 d-block"></i>
+                <h4 class="alert-heading">Sin historial registrado</h4>
+                <p>No se encontraron registros de cambios para este criterio.</p>
+            </div>
+            {% else %}
+
+            <!-- Sessions Timeline -->
+            <div class="timeline">
+                {% for import_session in sessions %}
+                <div class="card mb-4 shadow-sm border-0">
+                    <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <div class="d-flex justify-content-between align-items-center text-white">
+                            <div>
+                                <h5 class="mb-0">
+                                    <i class="bi bi-cloud-upload-fill me-2"></i>
+                                    Importación - {{ import_session.date.strftime('%Y-%m-%d %H:%M:%S') }}
+                                </h5>
+                                <small class="opacity-75">
+                                    <i class="bi bi-box-fill me-1"></i> VDOM: {{ import_session.vdom }}
+                                    {% if import_session.id != 'legacy' %}
+                                    | <i class="bi bi-key me-1"></i> Session: {{ import_session.id[:8] }}...
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-success me-1" title="Creadas">
+                                    <i class="bi bi-plus-circle"></i> {{ import_session.stats.create }}
+                                </span>
+                                <span class="badge bg-warning text-dark me-1" title="Modificadas">
+                                    <i class="bi bi-pencil-square"></i> {{ import_session.stats.modify }}
+                                </span>
+                                <span class="badge bg-danger" title="Eliminadas">
+                                    <i class="bi bi-trash"></i> {{ import_session.stats.delete }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="accordion" id="accordion-{{ import_session.id }}">
+                            {% for item in import_session.history_items %}
+                            <div class="accordion-item border-0 border-bottom">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#collapse-{{ item.id }}" aria-expanded="false">
+                                        <div class="w-100 d-flex justify-content-between align-items-center pe-3">
+                                            <div>
+                                                {% if item.change_type == 'create' %}
+                                                <span class="badge bg-success me-2">CREADO</span>
+                                                {% elif item.change_type == 'modify' %}
+                                                <span class="badge bg-warning text-dark me-2">MODIFICADO</span>
+                                                {% elif item.change_type == 'delete' %}
+                                                <span class="badge bg-danger me-2">ELIMINADO</span>
+                                                {% endif %}
+
+                                                <span class="fw-bold">
+                                                    Política ID: {{ item.snapshot.get('ID') or '?' }}
+                                                </span>
+                                                <span class="text-muted ms-2">
+                                                    {{ item.snapshot.get('Name') or item.snapshot.get('Policy') or '-'
+                                                    }}
+                                                </span>
+                                            </div>
+
+                                            {% if item.change_type == 'modify' and item.delta.get('fields_changed') %}
+                                            <span class="badge bg-info">
+                                                {{ item.delta.get('fields_changed') }} cambio(s)
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                    </button>
+                                </h2>
+                                <div id="collapse-{{ item.id }}" class="accordion-collapse collapse"
+                                    data-bs-parent="#accordion-{{ import_session.id }}">
+                                    <div class="accordion-body bg-light">
+                                        <!-- Delta View -->
+                                        {% if item.change_type == 'modify' %}
+                                        <h6 class="text-muted border-bottom pb-2 mb-3">
+                                            <i class="bi bi-arrow-left-right"></i> Cambios detectados:
+                                        </h6>
+
+                                        {% if item.delta.get('changes') %}
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-hover mb-0">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th width="30%">Campo</th>
+                                                        <th width="35%">Valor Anterior</th>
+                                                        <th width="35%">Valor Nuevo</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for change in item.delta.get('changes', []) %}
+                                                    {% set parts = change.split(' → ') %}
+                                                    {% if parts|length == 2 %}
+                                                    {% set field_and_old = parts[0].split(': ') %}
+                                                    <tr>
+                                                        <td class="fw-bold">{{ field_and_old[0] }}</td>
+                                                        <td>
+                                                            <code
+                                                                class="text-danger small">{{ field_and_old[1] if field_and_old|length > 1 else '-' }}</code>
+                                                        </td>
+                                                        <td>
+                                                            <code class="text-success small">{{ parts[1] }}</code>
+                                                        </td>
+                                                    </tr>
+                                                    {% else %}
+                                                    <tr>
+                                                        <td colspan="3">{{ change }}</td>
+                                                    </tr>
+                                                    {% endif %}
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {% else %}
+                                        <p class="text-muted small mb-0">No se detectaron cambios específicos.</p>
+                                        {% endif %}
+
+                                        {% elif item.change_type == 'create' %}
+                                        <div class="alert alert-success mb-0">
+                                            <i class="bi bi-check-circle"></i> Política importada/creada inicialmente.
+                                        </div>
+
+                                        {% elif item.change_type == 'delete' %}
+                                        <div class="alert alert-danger mb-0">
+                                            <i class="bi bi-x-circle"></i> Política eliminada o no presente en
+                                            importación.
+                                        </div>
+                                        {% endif %}
+
+                                        <!-- Snapshot Toggle -->
+                                        <div class="mt-3">
+                                            <a class="btn btn-link btn-sm text-decoration-none p-0"
+                                                data-bs-toggle="collapse" href="#snap-{{ item.id }}" role="button">
+                                                <i class="bi bi-file-earmark-code"></i> Ver Snapshot Completo (JSON)
+                                            </a>
+                                            <div class="collapse mt-2" id="snap-{{ item.id }}">
+                                                <div class="card card-body bg-dark text-white border-0 py-2">
+                                                    <pre class="mb-0 small text-white"
+                                                        style="max-height: 300px; overflow-y: auto;">{{ item.snapshot | tojson(indent=2) }}</pre>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .accordion-button:not(.collapsed) {
+        background-color: #f8f9fa;
+        color: #000;
+    }
+
+    .accordion-button:focus {
+        box-shadow: none;
+        border-color: rgba(0, 0, 0, .125);
+    }
+
+    .accordion-button::after {
+        margin-left: auto;
+    }
+</style>
+{% endblock %}

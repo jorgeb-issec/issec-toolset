@@ -1,0 +1,78 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 mx-auto">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-person-circle"></i> Mi Perfil</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="text-center mb-4">
+                        {% if current_user.profile_pic %}
+                        <img src="{{ url_for('static', filename='uploads/' + current_user.profile_pic) }}"
+                            class="rounded-circle img-thumbnail mb-2"
+                            style="width: 120px; height: 120px; object-fit: cover;">
+                        {% else %}
+                        <div class="display-1 text-muted"><i class="bi bi-person-circle"></i></div>
+                        {% endif %}
+
+                        <div class="mt-2 w-50 mx-auto">
+                            <label class="form-label small text-muted">Cambiar Foto</label>
+                            <input type="file" name="profile_pic" class="form-control form-control-sm" accept="image/*">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label>Nombre de Usuario</label>
+                            <input type="text" class="form-control" value="{{ current_user.username }}" disabled>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Email</label>
+                            <input type="email" name="email" class="form-control" value="{{ current_user.email }}"
+                                required>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label>Nombre Completo</label>
+                            <input type="text" name="full_name" class="form-control"
+                                value="{{ current_user.full_name or '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Cargo / Posición</label>
+                            <input type="text" name="position" class="form-control"
+                                value="{{ current_user.position or '' }}">
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h5 class="mb-3">Seguridad (Opcional)</h5>
+                    <p class="text-muted small">Solo llena estos campos si deseas cambiar tu contraseña.</p>
+
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña Actual</label>
+                        <input type="password" name="current_password" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nueva Contraseña</label>
+                        <input type="password" name="new_password" class="form-control" minlength="6">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Confirmar Nueva Contraseña</label>
+                        <input type="password" name="confirm_password" class="form-control" minlength="6">
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Actualizar Perfil
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

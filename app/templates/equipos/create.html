@@ -1,0 +1,51 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="card">
+    <div class="card-header">Nuevo Equipo</div>
+    <div class="card-body">
+        <form method="POST">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label>Nombre</label>
+                    <input type="text" name="nombre" class="form-control" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label>Sitio / Ubicación</label>
+                    <select name="site_id" class="form-select" required>
+                        <option value="">-- Seleccionar Sitio --</option>
+                        {% for s in sites %}
+                        <option value="{{ s.id }}">{{ s.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text"><a href="{{ url_for('site.list_sites') }}">¿No existe? Crear nuevo sitio</a>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label>Serial (Principal)</label>
+                    <input type="text" name="serial" class="form-control" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label>Hostname</label>
+                    <input type="text" name="hostname" class="form-control">
+                </div>
+                <div class="col-md-12 mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="ha_habilitado" id="haCheck">
+                        <label class="form-check-label">Habilitar Alta Disponibilidad (HA)</label>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3" id="secSerialDiv" style="display:none;">
+                    <label>Serial Secundario</label>
+                    <input type="text" name="segundo_serial" class="form-control">
+                </div>
+            </div>
+            <button class="btn btn-success">Guardar</button>
+        </form>
+    </div>
+</div>
+<script>
+    document.getElementById('haCheck').addEventListener('change', function () {
+        document.getElementById('secSerialDiv').style.display = this.checked ? 'block' : 'none';
+    });
+</script>
+{% endblock %}

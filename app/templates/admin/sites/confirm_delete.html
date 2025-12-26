@@ -1,0 +1,90 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow border-0">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle-fill"></i> Confirmar Eliminación de Sitio</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <strong>Atención:</strong> Está por eliminar el sitio <strong>{{ site.nombre }}</strong>
+                    </div>
+
+                    {% if equipos %}
+                    <div class="alert alert-danger">
+                        <i class="bi bi-router"></i> Este sitio tiene <strong>{{ equipos|length }}</strong> equipo(s)
+                        asignados.
+                        <br>Debe elegir qué hacer con ellos antes de continuar:
+                    </div>
+
+                    <form method="POST">
+                        <div class="mb-4">
+                            <h6>Equipos en este sitio:</h6>
+                            <ul class="list-group mb-3">
+                                {% for eq in equipos %}
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span><i class="bi bi-hdd-rack"></i> {{ eq.nombre }}</span>
+                                    <span class="badge bg-secondary">{{ eq.serial }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+
+                        {% if other_sites %}
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="radio" name="action" id="optMigrate" value="migrate"
+                                checked>
+                            <label class="form-check-label" for="optMigrate">
+                                <strong>Migrar equipos</strong> a otro sitio
+                            </label>
+                            <select name="target_site_id" class="form-select form-select-sm mt-2 ms-4"
+                                style="width: 300px;">
+                                {% for s in other_sites %}
+                                <option value="{{ s.id }}">{{ s.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <div class="form-check mb-4">
+                            <input class="form-check-input" type="radio" name="action" id="optDelete"
+                                value="delete_all">
+                            <label class="form-check-label text-danger" for="optDelete">
+                                <strong>Eliminar todos los equipos</strong> (y sus políticas)
+                            </label>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('site.list_sites') }}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-danger"
+                                onclick="return confirm('¿Está seguro? Esta acción no se puede deshacer.')">
+                                <i class="bi bi-trash"></i> Eliminar Sitio
+                            </button>
+                        </div>
+                    </form>
+
+                    {% else %}
+                    <p class="text-muted">Este sitio no tiene equipos asignados.</p>
+                    <form method="POST">
+                        <input type="hidden" name="action" value="none">
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('site.list_sites') }}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash"></i> Confirmar Eliminación
+                            </button>
+                        </div>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

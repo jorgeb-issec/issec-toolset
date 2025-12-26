@@ -1,0 +1,158 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <h2><i class="bi bi-person-badge-fill"></i> Gestión de Roles</h2>
+        <a href="{{ url_for('main.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver al Dashboard
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info shadow-sm">
+    <i class="bi bi-info-circle"></i> Los roles definen los permisos de los usuarios. Los permisos pueden ser asignados
+    globalmente o por empresa.
+</div>
+
+<div class="card shadow">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Roles Disponibles</h5>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addRoleModal">
+            <i class="bi bi-plus-lg"></i> Nuevo Rol
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 20%;">Nombre</th>
+                        <th style="width: 30%;">Descripción</th>
+                        <th>Permisos Habilitados</th>
+                        <th class="text-end" style="width: 15%;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for role in roles %}
+                    <tr>
+                        <td class="fw-bold">{{ role.name }}</td>
+                        <td class="text-muted small">{{ role.description or '-' }}</td>
+                        <td>
+                            {% if role.permissions %}
+                            {% for key, val in role.permissions.items() %}
+                            {% if val %}
+                            <span class="badge bg-light text-dark border me-1 mb-1">{{ key }}</span>
+                            {% endif %}
+                            {% endfor %}
+                            {% else %}
+                            <span class="text-muted fst-italic">Sin permisos</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="modal"
+                                data-bs-target="#editRoleModal{{ loop.index }}" title="Editar Permisos">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+
+                            {% if role.name != 'Admin' %}
+                            <form action="{{ url_for('role.delete_role', role_id=role.id) }}" method="POST"
+                                class="d-inline" onsubmit="return confirm('¿Eliminar rol {{ role.name }}?');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar Rol">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    <!-- Edit Role Modal -->
+                    <div class="modal fade" id="editRoleModal{{ loop.index }}" tabindex="-1">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <form action="{{ url_for('role.edit_role', role_id=role.id) }}" method="POST">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Editar Rol: {{ role.name }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <label>Descripción</label>
+                                            <input type="text" name="description" class="form-control"
+                                                value="{{ role.description or '' }}">
+                                        </div>
+                                        <h6 class="mb-3">Permisos</h6>
+                                        <div class="row">
+                                            {% for perm in permissions %}
+                                            <div class="col-md-6 mb-2">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox"
+                                                        name="perm_{{ perm.key }}"
+                                                        id="edit_{{ role.id }}_{{ perm.key }}" {% if
+                                                        role.permissions.get(perm.key) %}checked{% endif %}>
+                                                    <label class="form-check-label"
+                                                        for="edit_{{ role.id }}_{{ perm.key }}">
+                                                        {{ perm.label }}
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary"
+                                            data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Role Modal -->
+<div class="modal fade" id="addRoleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form action="{{ url_for('role.add_role') }}" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">Crear Nuevo Rol</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label>Nombre del Rol</label>
+                        <input type="text" name="name" class="form-control" required placeholder="Ej: Auditor">
+                    </div>
+                    <div class="mb-3">
+                        <label>Descripción</label>
+                        <input type="text" name="description" class="form-control" placeholder="Descripción breve">
+                    </div>
+                    <h6 class="mb-3">Permisos Iniciales</h6>
+                    <div class="row">
+                        {% for perm in permissions %}
+                        <div class="col-md-6 mb-2">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="perm_{{ perm.key }}"
+                                    id="add_{{ perm.key }}">
+                                <label class="form-check-label" for="add_{{ perm.key }}">
+                                    {{ perm.label }}
+                                </label>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Crear Rol</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

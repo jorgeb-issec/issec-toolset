@@ -1,0 +1,42 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">Nuevo Sitio</div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label>Nombre del Sitio</label>
+                        <input type="text" name="nombre" class="form-control" required placeholder="Ej: Data Center A">
+                    </div>
+                    <div class="mb-3">
+                        <label>Dirección Física (Opcional)</label>
+                        <input type="text" name="direccion" class="form-control">
+                    </div>
+                    <button class="btn btn-success w-100">Guardar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">Sitios Registrados</div>
+            <div class="card-body">
+                <table class="table table-striped">
+                    <thead><tr><th>Nombre</th><th>Dirección</th><th>Equipos</th></tr></thead>
+                    <tbody>
+                        {% for s in sites %}
+                        <tr>
+                            <td>{{ s.nombre }}</td>
+                            <td>{{ s.direccion }}</td>
+                            <td><span class="badge bg-secondary">{{ s.equipos|length }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

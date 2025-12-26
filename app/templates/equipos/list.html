@@ -1,0 +1,62 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3><i class="bi bi-router"></i> Equipos Registrados</h3>
+    <a href="{{ url_for('equipo.create_equipo') }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> Nuevo Equipo
+    </a>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4">Nombre</th>
+                    <th>Sitio / Ubicación</th>
+                    <th>Serial Number</th>
+                    <th>Alta Disponibilidad (HA)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for eq in equipos %}
+                <tr>
+                    <td class="ps-4 fw-bold text-primary">{{ eq.nombre }}</td>
+                    
+                    <td>
+                        {% if eq.site %}
+                            <span class="badge bg-info text-dark border border-info">
+                                <i class="bi bi-geo-alt-fill"></i> {{ eq.site.nombre }}
+                            </span>
+                        {% else %}
+                            <span class="text-muted small fst-italic">Sin Sitio Asignado</span>
+                        {% endif %}
+                    </td>
+                    
+                    <td class="font-monospace text-muted">{{ eq.serial }}</td>
+                    
+                    <td>
+                        {% if eq.ha_habilitado %}
+                            <span class="badge bg-success"><i class="bi bi-check-circle"></i> Sí</span>
+                            {% if eq.segundo_serial %}
+                                <small class="text-muted d-block" style="font-size: 0.7em;">{{ eq.segundo_serial }}</small>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted"><i class="bi bi-dash-circle"></i> No</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center py-5 text-muted">
+                        <h4>No hay equipos registrados</h4>
+                        <p>Haz clic en "Nuevo Equipo" para comenzar.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

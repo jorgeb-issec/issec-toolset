@@ -1,0 +1,117 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Sitios</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal"
+            data-bs-target="#addSiteModal">
+            <i class="bi bi-plus-lg"></i> Nuevo Sitio
+        </button>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped table-sm">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Dirección</th>
+                <th>Equipos Asignados</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for site in sites %}
+            <tr>
+                <td class="fw-bold">{{ site.nombre }}</td>
+                <td>{{ site.direccion or '-' }}</td>
+                <td>
+                    {% if site.equipos %}
+                    {% for equipo in site.equipos %}
+                    <a href="{{ url_for('device.view_device', device_id=equipo.id) }}"
+                        class="badge bg-info text-decoration-none text-dark me-1" title="Serial: {{ equipo.serial }}">
+                        <i class="bi bi-router"></i> {{ equipo.hostname or equipo.nombre }}
+                    </a>
+                    {% endfor %}
+                    {% else %}
+                    <span class="text-muted small">Sin equipos</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="modal"
+                        data-bs-target="#editSiteModal-{{ site.id }}" title="Editar sitio">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <a href="{{ url_for('site.confirm_delete_site', site_id=site.id) }}"
+                        class="btn btn-sm btn-outline-danger" title="Eliminar sitio">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal Add Site -->
+<div class="modal fade" id="addSiteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form action="{{ url_for('site.add_site') }}" method="POST">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-geo-alt-fill me-2"></i>Agregar Nuevo Sitio</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Nombre del Sitio</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="address" class="form-label">Dirección</label>
+                        <input type="text" class="form-control" id="address" name="address"
+                            placeholder="Ej: Av. Corrientes 1234, CABA">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Site Modals (one per site) -->
+{% for site in sites %}
+<div class="modal fade" id="editSiteModal-{{ site.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form action="{{ url_for('site.edit_site', site_id=site.id) }}" method="POST">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar Sitio</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre del Sitio</label>
+                        <input type="text" class="form-control" name="nombre" value="{{ site.nombre }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Dirección</label>
+                        <input type="text" class="form-control" name="direccion" value="{{ site.direccion or '' }}"
+                            placeholder="Ej: Av. Corrientes 1234, CABA">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

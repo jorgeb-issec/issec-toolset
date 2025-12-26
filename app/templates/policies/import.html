@@ -1,0 +1,74 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="card col-md-8 mx-auto shadow">
+    <div class="card-header bg-primary text-white">Importar JSON de Fortigate</div>
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="fw-bold">1. Seleccionar Equipo</label>
+                <select name="device_id" class="form-select" required>
+                    <option value="">-- Seleccionar --</option>
+                    {% for eq in equipos %}
+                    <option value="{{ eq.id }}">
+                        {{ eq.nombre }} (SN: {{ eq.serial }}) - {{ eq.site.nombre if eq.site else 'Sin Sitio' }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="fw-bold">2. Seleccionar VDOM</label>
+                <select name="vdom" id="vdom-select" class="form-select" required>
+                    <option value="root">root (Default)</option>
+                </select>
+                <small class="text-muted">Si el equipo tiene VDOMs configurados, aparecerán aquí.</small>
+            </div>
+
+            <script>
+                document.querySelector('select[name="device_id"]').addEventListener('change', function () {
+                    var deviceId = this.value;
+                    var vdomSelect = document.getElementById('vdom-select');
+
+                    vdomSelect.innerHTML = '<option value="root">Cargando...</option>';
+                    vdomSelect.disabled = true;
+
+                    if (deviceId) {
+                        fetch('/admin/devices/' + deviceId + '/vdoms/json')
+                            .then(response => response.json())
+                            .then(data => {
+                                vdomSelect.innerHTML = '';
+                                if (data.length > 0) {
+                                    data.forEach(v => {
+                                        var opt = document.createElement('option');
+                                        opt.value = v.name;
+                                        opt.textContent = v.name;
+                                        vdomSelect.appendChild(opt);
+                                    });
+                                } else {
+                                    // Fallback if no VDOMs found, default to root but allow user to continue
+                                    var opt = document.createElement('option');
+                                    opt.value = "root";
+                                    opt.textContent = "root (Default - Sin VDOMs detectados)";
+                                    vdomSelect.appendChild(opt);
+                                }
+                                vdomSelect.disabled = false;
+                            })
+                            .catch(err => {
+                                console.error(err);
+                                vdomSelect.innerHTML = '<option value="root">Error cargando VDOMs - Usando root</option>';
+                                vdomSelect.disabled = false;
+                            });
+                    } else {
+                        vdomSelect.innerHTML = '<option value="root">root (Default)</option>';
+                        vdomSelect.disabled = false;
+                    }
+                });
+            </script>
+            <div class="mb-3">
+                <label class="fw-bold">3. Archivo JSON</label>
+                <input type="file" name="json_file" class="form-control" accept=".json" required>
+            </div>
+            <button class="btn btn-success w-100">Procesar</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

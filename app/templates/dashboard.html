@@ -1,0 +1,411 @@
+{% extends 'layout.html' %}
+{% block content %}
+
+<!-- GLOBAL ADMIN HEADER -->
+{% if is_admin %}
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card border-dark shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="bi bi-gear-fill me-2"></i> Panel de Administración Global</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <!-- Manage Users -->
+                    <div class="col-md-3">
+                        <div class="card h-100 border-0 bg-light">
+                            <div class="card-body text-center">
+                                <div class="h1 text-dark mb-3"><i class="bi bi-people-fill"></i></div>
+                                <h5 class="card-title">Usuarios</h5>
+                                <p class="small text-muted">Crear, eliminar y gestionar acceso.</p>
+                                <a href="{{ url_for('main.list_users') }}"
+                                    class="btn btn-outline-dark w-100">Administrar Usuarios</a>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Manage Companies -->
+                    <div class="col-md-3">
+                        <div class="card h-100 border-0 bg-light">
+                            <div class="card-body text-center">
+                                <div class="h1 text-dark mb-3"><i class="bi bi-buildings-fill"></i></div>
+                                <h5 class="card-title">Empresas</h5>
+                                <p class="small text-muted">Gestionar tenants.</p>
+                                <button class="btn btn-outline-dark w-100" data-bs-toggle="modal"
+                                    data-bs-target="#adminCompaniesModal">
+                                    Ver Empresas
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Manage Roles -->
+                    <div class="col-md-3">
+                        <div class="card h-100 border-0 bg-light">
+                            <div class="card-body text-center">
+                                <div class="h1 text-dark mb-3"><i class="bi bi-person-badge-fill"></i></div>
+                                <h5 class="card-title">Roles</h5>
+                                <p class="small text-muted">Definir permisos.</p>
+                                <a href="{{ url_for('role.list_roles') }}" class="btn btn-outline-dark w-100">Gestionar
+                                    Roles</a>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Profile / Settings -->
+                    <div class="col-md-3">
+                        <div class="card h-100 border-0 bg-light">
+                            <div class="card-body text-center">
+                                <div class="h1 text-dark mb-3"><i class="bi bi-shield-lock-fill"></i></div>
+                                <h5 class="card-title">Seguridad</h5>
+                                <p class="small text-muted">Ajustes de cuenta.</p>
+                                <a href="{{ url_for('auth.profile') }}" class="btn btn-outline-dark w-100">Mi Perfil</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-2">
+                    <!-- Manage Sites -->
+                    <div class="col-md-3">
+                        <div class="card h-100 border-0 bg-light">
+                            <div class="card-body text-center">
+                                <div class="h1 text-dark mb-3"><i class="bi bi-geo-alt-fill"></i></div>
+                                <h5 class="card-title">Sitios</h5>
+                                <p class="small text-muted">Gestionar ubicaciones físicas.</p>
+                                <a href="{{ url_for('site.list_sites') }}" class="btn btn-outline-dark w-100">Ver
+                                    Sitios</a>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Manage Devices -->
+                    <div class="col-md-3">
+                        <div class="card h-100 border-0 bg-light">
+                            <div class="card-body text-center">
+                                <div class="h1 text-dark mb-3"><i class="bi bi-router-fill"></i></div>
+                                <h5 class="card-title">Equipos</h5>
+                                <p class="small text-muted">Gestionar firewalls y configs.</p>
+                                <a href="{{ url_for('device.list_devices') }}" class="btn btn-outline-dark w-100">Ver
+                                    Equipos</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Companies Modal - Material Design -->
+<div class="modal fade" id="adminCompaniesModal" tabindex="-1" aria-labelledby="adminCompaniesModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <h5 class="modal-title text-white" id="adminCompaniesModalLabel">
+                    <i class="bi bi-buildings-fill me-2"></i>Gestión de Empresas
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <span class="text-muted">{{ all_companies|length }} empresa(s) registradas</span>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCompanyModal"
+                        data-bs-dismiss="modal">
+                        <i class="bi bi-plus-lg me-1"></i> Nueva Empresa
+                    </button>
+                </div>
+
+                <div class="row g-4">
+                    {% for c in all_companies %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100 shadow-sm border-0 company-card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center mb-3">
+                                    {% if c.logo %}
+                                    <img src="{{ url_for('static', filename='uploads/' + c.logo) }}" alt="{{ c.name }}"
+                                        class="rounded-circle me-3 bg-light p-1"
+                                        style="width: 50px; height: 50px; object-fit: contain;">
+                                    {% else %}
+                                    <div class="rounded-circle me-3 d-flex align-items-center justify-content-center"
+                                        style="width: 50px; height: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                        <span class="text-white fw-bold" style="font-size: 1.2rem;">
+                                            {{ c.name[0]|upper }}
+                                        </span>
+                                    </div>
+                                    {% endif %}
+                                    <div>
+                                        <h6 class="mb-0 fw-bold">{{ c.name }}</h6>
+                                        <small class="text-muted">
+                                            <i class="bi bi-database"></i> {{ c.db_uri.split('/')[-1] }}
+                                        </small>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    {% if c.is_active %}
+                                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Activa</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary"><i class="bi bi-pause-circle"></i> Inactiva</span>
+                                    {% endif %}
+
+                                    {% for p in c.products %}
+                                    <span class="badge bg-info text-dark ms-1">
+                                        <i class="bi bi-box-seam"></i> {{ p|replace('_', ' ')|title }}
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark ms-1">Sin productos</span>
+                                    {% endfor %}
+                                </div>
+
+                                <div class="d-flex gap-2">
+                                    <a href="{{ url_for('auth.set_company', company_id=c.id) }}"
+                                        class="btn btn-primary btn-sm flex-grow-1">
+                                        <i class="bi bi-box-arrow-in-right"></i> Ingresar
+                                    </a>
+                                    <form action="{{ url_for('main.delete_company', company_id=c.id) }}" method="POST"
+                                        onsubmit="return confirm('¿ESTÁS SEGURO? Se eliminará la base de datos de {{ c.name }}.');">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Eliminar">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="col-12 text-center py-5">
+                        <i class="bi bi-building text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-2">No hay empresas registradas</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if company %}
+<div class="row">
+    <!-- Sidebar / Context Info -->
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    {% if company.logo %}
+                    <img src="{{ url_for('static', filename='uploads/' + company.logo) }}" alt="Logo"
+                        class="rounded bg-white p-1 me-2" style="height: 40px; width: 40px; object-fit: contain;">
+                    {% else %}
+                    <i class="bi bi-building me-2" style="font-size: 1.5rem;"></i>
+                    {% endif %}
+                    <h5 class="mb-0">{{ company.name }}</h5>
+                </div>
+                {% if can_edit %}
+                <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#editCompanyModal">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <small class="text-muted text-uppercase fw-bold">Estado</small>
+                    <div>
+                        {% if company.is_active %}
+                        <span class="badge bg-success">Activa</span>
+                        {% else %}
+                        <span class="badge bg-danger">Inactiva</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <small class="text-muted text-uppercase fw-bold">Productos</small>
+                    <div>
+                        {% for p in company.products %}
+                        <span class="badge bg-info text-dark border border-info">{{ p|replace('_', ' ')|title }}</span>
+                        {% else %}
+                        <span class="text-muted fst-italic">Sin productos asignados</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                <hr>
+                <div class="d-grid">
+                    <a href="{{ url_for('auth.select_company') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-repeat"></i> Cambiar Empresa
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tools Grid -->
+    <div class="col-md-8">
+        <h4 class="mb-3 text-primary border-bottom pb-2">Mis Herramientas</h4>
+        <div class="row g-4">
+
+            <!-- Policy Explorer -->
+            {% set policy_active = 'policy_explorer' in company.products %}
+            <div class="col-md-6">
+                <div
+                    class="card h-100 shadow-sm {{ 'border-primary hover-shadow transition' if policy_active else 'border-light bg-light text-muted opacity-75' }}">
+                    <div class="card-body text-center p-4">
+                        <div class="display-4 mb-3 {{ 'text-primary' if policy_active else 'text-secondary' }}">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
+                        <h4 class="card-title">Policy Explorer</h4>
+                        <p class="card-text small {{ 'text-muted' if policy_active else '' }}">
+                            Auditoría, visualización y análisis de diferencias en políticas de firewall.
+                        </p>
+
+                        {% if policy_active %}
+                        <a href="{{ url_for('policy.list_policies') }}"
+                            class="btn btn-primary w-100 stretched-link">Acceder</a>
+                        {% else %}
+                        <button disabled class="btn btn-outline-secondary w-100">
+                            <i class="bi bi-lock-fill"></i> No Habilitado
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Log Analyzer -->
+            {% set logs_active = 'log_analyzer' in company.products %}
+            <div class="col-md-6">
+                <div
+                    class="card h-100 shadow-sm {{ 'border-secondary hover-shadow transition' if logs_active else 'border-light bg-light text-muted opacity-75' }}">
+                    <div class="card-body text-center p-4">
+                        <div class="display-4 text-secondary mb-3"><i class="bi bi-file-bar-graph"></i></div>
+                        <h4 class="card-title">Log Analyzer</h4>
+                        <p class="card-text small {{ 'text-muted' if logs_active else '' }}">
+                            Análisis de logs y detección de amenazas.
+                        </p>
+
+                        {% if logs_active %}
+                        <button disabled class="btn btn-secondary w-100">Próximamente</button>
+                        {% else %}
+                        <button disabled class="btn btn-outline-secondary w-100">
+                            <i class="bi bi-lock-fill"></i> No Habilitado
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% else %}
+{% if not is_admin %}
+<!-- NO COMPANY SELECTED (NORMAL USER) -->
+<div class="alert alert-warning shadow-sm mb-4">
+    <strong>Atención:</strong> No tienes una empresa seleccionada. <a
+        href="{{ url_for('auth.select_company') }}">Seleccionar Empresa</a>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- Modal Edit Company -->
+{% if can_edit and company %}
+<div class="modal fade" id="editCompanyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('main.edit_company') }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Empresa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Current Logo Display -->
+                    <div class="text-center mb-3">
+                        {% if company.logo %}
+                        <img src="{{ url_for('static', filename='uploads/' + company.logo) }}" alt="Logo"
+                            class="img-thumbnail" style="max-height: 80px;">
+                        {% else %}
+                        <div class="text-muted small">Sin Logo</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label>Logo de la Empresa</label>
+                        <input type="file" name="logo" class="form-control" accept="image/png, image/jpeg">
+                    </div>
+
+                    <div class="mb-3">
+                        <label>Nombre</label>
+                        <input type="text" name="name" class="form-control" value="{{ company.name }}" required>
+                    </div>
+                    <!-- Products Selection -->
+                    <div class="mb-3">
+                        <label>Productos</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="products" value="policy_explorer" {%
+                                if 'policy_explorer' in company.products %}checked{% endif %}>
+                            <label class="form-check-label">Policy Explorer</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="products" value="log_analyzer" {%
+                                if 'log_analyzer' in company.products %}checked{% endif %}>
+                            <label class="form-check-label">Log Analyzer</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modal ADD Company -->
+<div class="modal fade" id="addCompanyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('main.add_company') }}" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva Empresa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle"></i> Se creará una base de datos PostgreSQL dedicada para esta
+                        empresa.
+                    </div>
+                    <div class="mb-3">
+                        <label>Nombre de la Empresa</label>
+                        <input type="text" name="name" class="form-control" placeholder="Ej: TechCorp" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>Habilitar Productos</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="products" value="policy_explorer"
+                                checked>
+                            <label class="form-check-label">Policy Explorer</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="products" value="log_analyzer">
+                            <label class="form-check-label">Log Analyzer</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Empresa</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .hover-shadow:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    .transition {
+        transition: all 0.3s ease;
+    }
+</style>
+{% endblock %}

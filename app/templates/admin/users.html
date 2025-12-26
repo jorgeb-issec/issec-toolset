@@ -1,0 +1,148 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <h2><i class="bi bi-people-fill"></i> Gestión de Usuarios</h2>
+        <a href="{{ url_for('main.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver al Dashboard
+        </a>
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Usuarios del Sistema</h5>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addUserModal">
+            <i class="bi bi-person-plus"></i> Nuevo Usuario
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Email</th>
+                        <th>Nombre / Puesto</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td class="fw-bold">
+                            <i class="bi bi-person-circle me-2 text-secondary"></i> {{ user.username }}
+                            {% if user.username == 'admin' %}
+                            <span class="badge bg-warning text-dark ms-2">Admin Global</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            <div class="small fw-bold">{{ user.full_name or '-' }}</div>
+                            <div class="small text-muted">{{ user.position or '-' }}</div>
+                        </td>
+                        <td class="text-end">
+                            <a href="{{ url_for('user_role.manage_user_roles', user_id=user.id) }}"
+                                class="btn btn-sm btn-outline-primary me-1" title="Gestionar Roles">
+                                <i class="bi bi-shield-lock"></i> Roles
+                            </a>
+                            <button class="btn btn-sm btn-outline-warning me-1" data-bs-toggle="modal"
+                                data-bs-target="#resetPassModal{{ loop.index }}" title="Restablecer Contraseña">
+                                <i class="bi bi-key"></i>
+                            </button>
+
+                            {% if user.username != 'admin' %}
+                            <form action="{{ url_for('main.delete_user', user_id=user.id) }}" method="POST"
+                                class="d-inline"
+                                onsubmit="return confirm('¿Seguro que desea eliminar al usuario {{ user.username }}?');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar Usuario">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    <!-- Reset Password Modal -->
+                    <div class="modal fade" id="resetPassModal{{ loop.index }}" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <form action="{{ url_for('main.reset_user_password', user_id=user.id) }}" method="POST">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Cambiar Contraseña: {{ user.username }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <label>Nueva Contraseña</label>
+                                            <input type="password" name="new_password" class="form-control" required
+                                                minlength="6">
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary"
+                                            data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="submit" class="btn btn-warning">Actualizar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('main.add_user') }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">Crear Nuevo Usuario</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-12 text-center mb-4">
+                            <label class="form-label d-block text-muted small">Foto de Perfil</label>
+                            <input type="file" name="profile_pic" class="form-control form-control-sm" accept="image/*">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Usuario *</label>
+                            <input type="text" name="username" class="form-control" required placeholder="Ej. jdoe">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email *</label>
+                            <input type="email" name="email" class="form-control" required
+                                placeholder="Ej. jdoe@company.com">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nombre Completo</label>
+                            <input type="text" name="full_name" class="form-control" placeholder="Ej. John Doe">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Puesto</label>
+                            <input type="text" name="position" class="form-control"
+                                placeholder="Ej. Analista de Seguridad">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña Inicial *</label>
+                        <input type="password" name="password" class="form-control" required minlength="6">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Usuario</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endblock %}

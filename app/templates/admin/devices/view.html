@@ -1,0 +1,636 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="bi bi-router"></i> {{ device.hostname or device.nombre }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('history.device_history', device_id=device.id) }}" class="btn btn-outline-info me-2"><i
+                class="bi bi-clock-history"></i> Historial</a>
+        <!-- Refresh Config Button -->
+        <form action="{{ url_for('device.refresh_device_config', device_id=device.id) }}" method="POST"
+            enctype="multipart/form-data" class="d-inline me-2">
+            <label class="btn btn-outline-success" title="Actualizar Config desde archivo .config">
+                <i class="bi bi-arrow-repeat"></i> Actualizar Config
+                <input type="file" name="config_file" hidden accept=".conf,.config,.txt" onchange="this.form.submit()">
+            </label>
+        </form>
+        <button class="btn btn-outline-warning me-2" data-bs-toggle="modal" data-bs-target="#editDeviceModal">
+            <i class="bi bi-pencil"></i> Editar
+        </button>
+        <a href="{{ url_for('device.list_devices') }}" class="btn btn-outline-secondary me-2">Volver</a>
+        <button class="btn btn-outline-primary" onclick="window.print()">Imprimir</button>
+    </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="deviceTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboard"
+            type="button" role="tab" aria-selected="true"><i class="bi bi-speedometer2 me-1"></i> Dashboard</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="interfaces-tab" data-bs-toggle="tab" data-bs-target="#interfaces" type="button"
+            role="tab" aria-selected="false"><i class="bi bi-ethernet me-1"></i> Interfaces</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="vdoms-tab" data-bs-toggle="tab" data-bs-target="#vdoms" type="button" role="tab"
+            aria-selected="false"><i class="bi bi-diagram-3 me-1"></i> VDOMs</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="raw-tab" data-bs-toggle="tab" data-bs-target="#raw" type="button" role="tab"
+            aria-selected="false"><i class="bi bi-code-square me-1"></i> Raw Config</button>
+    </li>
+</ul>
+
+<div class="tab-content" id="deviceTabsContent">
+    <!-- Dashboard Tab -->
+    <div class="tab-pane fade show active" id="dashboard" role="tabpanel" aria-labelledby="dashboard-tab">
+
+        <!-- Quick Stats Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="text-primary mb-2">
+                            <i class="bi bi-diagram-3-fill" style="font-size: 2rem;"></i>
+                        </div>
+                        <h3 class="mb-0">{{ vdoms|length }}</h3>
+                        <p class="text-muted mb-0 small">VDOMs Configurados</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="text-success mb-2">
+                            <i class="bi bi-ethernet" style="font-size: 2rem;"></i>
+                        </div>
+                        <h3 class="mb-0">
+                            {% if device.config_data and device.config_data.get('interfaces') %}
+                            {{ device.config_data['interfaces']|length }}
+                            {% else %}
+                            0
+                            {% endif %}
+                        </h3>
+                        <p class="text-muted mb-0 small">Interfaces Totales</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="text-info mb-2">
+                            <i class="bi bi-arrow-up-circle-fill" style="font-size: 2rem;"></i>
+                        </div>
+                        <h3 class="mb-0">
+                            {% if device.config_data and device.config_data.get('interfaces') %}
+                            {{ device.config_data['interfaces']|selectattr('status', 'equalto', 'up')|list|length }}
+                            {% else %}
+                            0
+                            {% endif %}
+                        </h3>
+                        <p class="text-muted mb-0 small">Interfaces UP</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        {% set ha_info = device.config_data.get('ha', {}) if device.config_data else {} %}
+                        {% set ha_mode = ha_info.get('mode', 'standalone') %}
+                        {% set ha_enabled = ha_info.get('enabled', device.ha_habilitado) %}
+                        <div class="{% if ha_enabled %}text-success{% else %}text-secondary{% endif %} mb-2">
+                            <i class="bi bi-shield-fill-check" style="font-size: 2rem;"></i>
+                        </div>
+                        <h3 class="mb-0">
+                            {% if ha_enabled %}
+                            <span class="badge bg-success">{{ ha_mode|upper }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Standalone</span>
+                            {% endif %}
+                        </h3>
+                        <p class="text-muted mb-0 small">Modo de Operación</p>
+                        {% if ha_info.get('group_name') %}
+                        <small class="text-muted">Grupo: {{ ha_info.group_name }}</small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <!-- System Information Widget -->
+            <div class="col-lg-6">
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-header bg-gradient"
+                        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <span class="fw-bold text-white"><i class="bi bi-info-circle-fill me-2"></i> Información del
+                            Sistema</span>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-borderless table-sm mb-0">
+                            <tbody>
+                                <tr>
+                                    <td class="text-muted w-40"><i class="bi bi-hdd-network me-2"></i>Hostname:</td>
+                                    <td class="fw-bold">{{ device.hostname }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted"><i class="bi bi-upc-scan me-2"></i>Serial Number:</td>
+                                    <td>
+                                        <code class="text-dark bg-light px-2 py-1 rounded">{{ device.serial }}</code>
+                                        {% if device.serial and device.serial.startswith('TEMP-') %}
+                                        <span class="badge bg-warning text-dark ms-2"
+                                            title="Serial temporal generado">⚠️ Temporal</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted"><i class="bi bi-cpu me-2"></i>Firmware:</td>
+                                    <td>
+                                        <span class="badge bg-dark">
+                                            {{ device.config_data.get('firmware', 'Unknown') if device.config_data else
+                                            'N/A' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted"><i class="bi bi-clock me-2"></i>Timezone:</td>
+                                    <td>{{ device.config_data.get('system', {}).get('timezone', '-') if
+                                        device.config_data else '-' }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted"><i class="bi bi-stopwatch me-2"></i>Admin Timeout:</td>
+                                    <td>{{ device.config_data.get('system', {}).get('admintimeout', '-') if
+                                        device.config_data else '-' }} min</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted"><i class="bi bi-geo-alt-fill me-2"></i>Sitio:</td>
+                                    <td>
+                                        {% if device.site %}
+                                        <span class="badge bg-danger">{{ device.site.nombre }}</span>
+                                        {% else %}
+                                        <span class="text-muted">No asignado</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VDOMs Summary Widget -->
+            <div class="col-lg-6">
+                <h5 class="text-primary mb-3"><i class="bi bi-diagram-3 me-2"></i>VDOMs</h5>
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-header bg-gradient"
+                        style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                        <span class="fw-bold text-white"><i class="bi bi-diagram-3-fill me-2"></i> Resumen de
+                            VDOMs</span>
+                    </div>
+                    <div class="card-body">
+                        {% if vdoms %}
+                        <div class="list-group list-group-flush">
+                            {% for v in vdoms[:5] %}
+                            <div
+                                class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
+                                <div>
+                                    <i class="bi bi-box-fill text-primary me-2"></i>
+                                    <strong>{{ v.name }}</strong>
+                                    {% if v.comments %}
+                                    <br><small class="text-muted ms-4">{{ v.comments }}</small>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    {% if device.config_data and device.config_data.get('interfaces') %}
+                                    {% set intf_count = device.config_data['interfaces']|selectattr('vdom', 'equalto',
+                                    v.name)|list|length %}
+                                    <span class="badge bg-light text-dark border" title="Interfaces en este VDOM">
+                                        <i class="bi bi-ethernet"></i> {{ intf_count }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% if vdoms|length > 5 %}
+                            <div class="text-center mt-2">
+                                <small class="text-muted">Y {{ vdoms|length - 5 }} VDOM(s) más...</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                            <p class="mt-2">No hay VDOMs configurados</p>
+                            <a href="#vdoms" data-bs-toggle="tab" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-plus-lg"></i> Agregar VDOM
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interface Distribution by VDOM -->
+        {% if device.config_data and device.config_data.get('interfaces') %}
+        <h5 class="text-primary mb-3 mt-4"><i class="bi bi-ethernet me-2"></i>VDOM Interfaces</h5>
+        <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-gradient"
+                        style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                        <span class="fw-bold text-white"><i class="bi bi-pie-chart-fill me-2"></i> Distribución de
+                            Interfaces por VDOM</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% set vdom_groups = {} %}
+                            {% for intf in device.config_data['interfaces'] %}
+                            {% set vdom_name = intf.vdom %}
+                            {% if vdom_name not in vdom_groups %}
+                            {% set _ = vdom_groups.update({vdom_name: []}) %}
+                            {% endif %}
+                            {% set _ = vdom_groups[vdom_name].append(intf) %}
+                            {% endfor %}
+
+                            {% for vdom_name, interfaces in vdom_groups.items() %}
+                            <div class="col-md-6 col-lg-4 mb-3">
+                                <div class="card border">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-primary">
+                                            <i class="bi bi-box-fill me-1"></i> {{ vdom_name }}
+                                        </h6>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <div class="text-muted small">Total Interfaces</div>
+                                                <h4 class="mb-0">{{ interfaces|length }}</h4>
+                                            </div>
+                                            <div class="text-end">
+                                                <div class="text-success small">
+                                                    <i class="bi bi-arrow-up-circle-fill"></i>
+                                                    {{ interfaces|selectattr('status', 'equalto', 'up')|list|length }}
+                                                    UP
+                                                </div>
+                                                <div class="text-danger small">
+                                                    <i class="bi bi-arrow-down-circle-fill"></i>
+                                                    {{ interfaces|selectattr('status', 'equalto', 'down')|list|length }}
+                                                    DOWN
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="progress mt-2" style="height: 8px;">
+                                            {% set up_count = interfaces|selectattr('status', 'equalto',
+                                            'up')|list|length %}
+                                            {% set total = interfaces|length %}
+                                            {% set percentage = (up_count / total * 100)|round|int if total > 0 else 0
+                                            %}
+                                            <div class="progress-bar bg-success" role="progressbar"
+                                                style="width: {{ percentage }}%;" aria-valuenow="{{ percentage }}"
+                                                aria-valuemin="0" aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Network Summary -->
+        {% if device.config_data and device.config_data.get('interfaces') %}
+        <div class="row g-4">
+            <div class="col-12">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-gradient"
+                        style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                        <span class="fw-bold text-white"><i class="bi bi-diagram-2-fill me-2"></i> Resumen de Red</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <div class="border-end">
+                                    <h4 class="text-primary">{{ device.config_data['interfaces']|selectattr('type',
+                                        'equalto', 'physical')|list|length }}</h4>
+                                    <p class="text-muted small mb-0">Interfaces Físicas</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="border-end">
+                                    <h4 class="text-info">{{ device.config_data['interfaces']|selectattr('type',
+                                        'equalto', 'vlan')|list|length }}</h4>
+                                    <p class="text-muted small mb-0">VLANs</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="border-end">
+                                    <h4 class="text-warning">{{ device.config_data['interfaces']|selectattr('type',
+                                        'equalto', 'tunnel')|list|length }}</h4>
+                                    <p class="text-muted small mb-0">Túneles VPN</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <h4 class="text-secondary">{{ device.config_data['interfaces']|selectattr('type',
+                                    'equalto', 'aggregate')|list|length }}</h4>
+                                <p class="text-muted small mb-0">Agregados (LAG)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Interfaces Tab -->
+    <div class="tab-pane fade" id="interfaces" role="tabpanel" aria-labelledby="interfaces-tab">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-primary text-white">
+                <span class="fw-bold"><i class="bi bi-ethernet me-2"></i> Todas las Interfaces</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Alias</th>
+                                <th>IP Address</th>
+                                <th>Tipo</th>
+                                <th>VDOM</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if device.config_data and device.config_data.get('interfaces') %}
+                            {% for intf in device.config_data['interfaces'] %}
+                            <tr>
+                                <td class="fw-bold">
+                                    <i class="bi bi-ethernet text-primary me-1"></i>
+                                    {{ intf.name }}
+                                </td>
+                                <td><small class="text-muted">{{ intf.alias or '-' }}</small></td>
+                                <td><code class="small">{{ intf.ip }}</code></td>
+                                <td>
+                                    {% if intf.type == 'physical' %}
+                                    <span class="badge bg-primary">Physical</span>
+                                    {% elif intf.type == 'vlan' %}
+                                    <span class="badge bg-info">VLAN</span>
+                                    {% elif intf.type == 'tunnel' %}
+                                    <span class="badge bg-warning">Tunnel</span>
+                                    {% elif intf.type == 'aggregate' %}
+                                    <span class="badge bg-secondary">Aggregate</span>
+                                    {% else %}
+                                    <span class="badge bg-light text-dark">{{ intf.type }}</span>
+                                    {% endif %}
+                                </td>
+                                <td><span class="badge bg-light text-dark border">{{ intf.vdom }}</span></td>
+                                <td><small class="text-muted">{{ intf.role }}</small></td>
+                                <td>
+                                    {% if intf.status == 'up' %}
+                                    <span class="badge bg-success"><i class="bi bi-arrow-up-circle"></i> UP</span>
+                                    {% else %}
+                                    <span class="badge bg-danger"><i class="bi bi-arrow-down-circle"></i> DOWN</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                                    <p class="mt-2">No hay datos de interfaces importados.</p>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VDOMs Tab -->
+    <div class="tab-pane fade" id="vdoms" role="tabpanel" aria-labelledby="vdoms-tab">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4>VDOMs Configurados</h4>
+            <div>
+                <button class="btn btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#importVDOMModal">
+                    <i class="bi bi-file-earmark-arrow-up"></i> Importar VDOM (.conf)
+                </button>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addVDOMModal">
+                    <i class="bi bi-plus-lg"></i> Agregar VDOM Manual
+                </button>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover border">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nombre VDOM</th>
+                        <th>Comentarios</th>
+                        <th>Creado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if vdoms %}
+                    {% for v in vdoms %}
+                    <tr>
+                        <td class="fw-bold">{{ v.name }}</td>
+                        <td>{{ v.comments or '-' }}</td>
+                        <td>{{ v.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <button class="btn btn-sm btn-outline-warning"
+                                    onclick='editVDOM({{ v.id|tojson }}, {{ v.name|tojson }}, {{ (v.comments or "")|tojson }})'
+                                    title="Editar Detalles">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <span class="badge bg-light text-muted border">ID: {{ v.id }}</span>
+                                <form action="{{ url_for('device.import_vdom_config', vdom_id=v.id) }}" method="POST"
+                                    enctype="multipart/form-data" class="d-inline-flex">
+                                    <label class="btn btn-sm btn-outline-secondary" title="Importar Config VDOM">
+                                        <i class="bi bi-upload"></i>
+                                        <input type="file" name="config_file" hidden onchange="this.form.submit()">
+                                    </label>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center py-4 text-muted">No se han detectado VDOMs.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Raw Config Tab -->
+    <div class="tab-pane fade" id="raw" role="tabpanel" aria-labelledby="raw-tab">
+        <div class="card shadow-sm border-0">
+            <div class="card-body bg-light">
+                <pre style="max-height: 600px; overflow-y: auto;">{{ device.config_data | tojson(indent=2) }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Add VDOM -->
+<div class="modal fade" id="addVDOMModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="{{ url_for('device.add_vdom', device_id=device.id) }}" method="POST">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Agregar VDOM Manualmente</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre del VDOM</label>
+                        <input type="text" name="vdom_name" class="form-control" required
+                            placeholder="Ej: root, routing, clientes">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Import VDOM -->
+<div class="modal fade" id="importVDOMModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="{{ url_for('device.import_new_vdom', device_id=device.id) }}" method="POST"
+            enctype="multipart/form-data">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Importar Nuevo VDOM</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        El sistema intentará detectar el nombre del VDOM desde el archivo. Si falla, use el campo
+                        opcional abajo.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Archivo de Configuración (.conf)</label>
+                        <input type="file" name="config_file" class="form-control" required accept=".conf,.txt">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Forzar Nombre VDOM (Opcional)</label>
+                        <input type="text" name="vdom_name_override" class="form-control"
+                            placeholder="Dejar en blanco para auto-detectar">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Importar y Crear</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Edit Device -->
+<div class="modal fade" id="editDeviceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="{{ url_for('device.edit_device', device_id=device.id) }}" method="POST">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Equipo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <input type="text" name="nombre" class="form-control" value="{{ device.nombre }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Serial Number</label>
+                        <input type="text" name="serial" class="form-control" value="{{ device.serial }}" required>
+                        <small class="text-muted">Cambiar el serial puede afectar la consistencia si hay logs/políticas
+                            asociadas bajo el old serial.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Hostname</label>
+                        <input type="text" name="hostname" class="form-control" value="{{ device.hostname }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Sitio</label>
+                        <select name="site_id" class="form-select">
+                            <option value="">-- Sin Sitio --</option>
+                            {% for s in sites %}
+                            <option value="{{ s.id }}" {% if device.site_id==s.id %}selected{% endif %}>{{ s.nombre }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" name="ha_habilitado" id="haCheck" {% if
+                            device.ha_habilitado %}checked{% endif %}>
+                        <label class="form-check-label" for="haCheck">¿HA Habilitado?</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Edit VDOM -->
+<div class="modal fade" id="editVDOMModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form id="editVDOMForm" method="POST">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar VDOM</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre del VDOM</label>
+                        <input type="text" name="name" id="edit_vdom_name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Comentarios</label>
+                        <textarea name="comments" id="edit_vdom_comments" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Actualizar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function editVDOM(id, name, comments) {
+        document.getElementById('edit_vdom_name').value = name;
+        document.getElementById('edit_vdom_comments').value = comments;
+
+        var form = document.getElementById('editVDOMForm');
+        form.action = '/admin/devices/vdom/' + id + '/edit';
+
+        var modal = new bootstrap.Modal(document.getElementById('editVDOMModal'));
+        modal.show();
+    }
+</script>
+{% endblock %}

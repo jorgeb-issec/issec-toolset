@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# App specific
+tmp_cache/
+app/static/uploads/*
+!app/static/uploads/.gitkeep
+
+# Logs
+*.log
+logs/
+
+# Example configs with sensitive data
+example/
+
+# Flask instance folder
+instance/
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/

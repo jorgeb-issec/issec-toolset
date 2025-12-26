@@ -1,0 +1,464 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4"><i class="bi bi-file-earmark-pdf-fill text-danger"></i> Generador de Reportes</h2>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <form action="{{ url_for('report.generate_pdf') }}" method="POST" target="_blank">
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold h5">1. Seleccione el Equipo a Auditar</label>
+                    <select name="device_id" class="form-select form-select-lg" required>
+                        <option value="" selected disabled>-- Elegir Firewall --</option>
+                        {% for eq in equipos %}
+                        <option value="{{ eq.id }}">{{ eq.serial }} {{ eq.nombre }} ({{ eq.site.nombre if eq.site else
+                            'Sin sitio' }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold h5">VDOM</label>
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="selectAllVdoms" checked>
+                            <label class="form-check-label small" for="selectAllVdoms">Seleccionar todos</label>
+                        </div>
+                    </div>
+                    <select name="vdom" id="vdomSelect" class="form-select" multiple size="4"
+                        style="min-height: 100px;">
+                        <option value="" disabled>-- Seleccione un equipo primero --</option>
+                    </select>
+                    <small class="text-muted">Ctrl+Click para selección múltiple</small>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold h5">Formato de Salida</label>
+                    <div class="d-flex gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="format" id="fmt1" value="pdf" checked>
+                            <label class="form-check-label" for="fmt1">
+                                <i class="bi bi-file-earmark-pdf text-danger"></i> Documento PDF
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="format" id="fmt2" value="csv">
+                            <label class="form-check-label" for="fmt2">
+                                <i class="bi bi-file-earmark-spreadsheet text-success"></i> Excel / CSV
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <label class="form-label fw-bold h5 mb-3">2. Tipo de Reporte</label>
+
+                <!-- DEVICE REPORTS SECTION -->
+                <h6 class="text-muted mb-2"><i class="bi bi-hdd-rack"></i> Reportes de Dispositivo</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <div class="form-check card h-100 p-3 border-primary-subtle hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep_dev"
+                                value="device_summary" required>
+                            <label class="form-check-label w-100" for="rep_dev">
+                                <span class="d-block h6 fw-bold text-primary"><i class="bi bi-info-circle"></i> Resumen
+                                    de Dispositivo</span>
+                                <small class="text-muted">Información del sistema, interfaces y VDOMs
+                                    configurados.</small>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check card h-100 p-3 border-purple-subtle hover-shadow"
+                            style="border-color: #9c5cd0 !important;">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep_changes"
+                                value="policy_changes">
+                            <label class="form-check-label w-100" for="rep_changes">
+                                <span class="d-block h6 fw-bold" style="color: #9c5cd0;"><i
+                                        class="bi bi-clock-history"></i> Historial de Cambios</span>
+                                <small class="text-muted">Registro de políticas creadas, modificadas y
+                                    eliminadas.</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- POLICY REPORTS SECTION -->
+                <h6 class="text-muted mb-2"><i class="bi bi-shield-check"></i> Reportes de Políticas</h6>
+                <div class="row g-3 mb-4">
+
+                    <div class="col-md-4">
+                        <div class="form-check card h-100 p-3 border-secondary-subtle hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep1"
+                                value="zero_usage">
+                            <label class="form-check-label w-100" for="rep1">
+                                <span class="d-block h6 fw-bold text-dark"><i class="bi bi-trash3"></i> Reglas Sin
+                                    Uso</span>
+                                <small class="text-muted">0 Hits o 0 Bytes de tráfico.</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check card h-100 p-3 border-warning-subtle hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep3"
+                                value="duplicates">
+                            <label class="form-check-label w-100" for="rep3">
+                                <span class="d-block h6 fw-bold text-warning"><i class="bi bi-files"></i> Posibles
+                                    Duplicados</span>
+                                <small class="text-muted">Reglas con misma config.</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check card h-100 p-3 border-info-subtle hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep4"
+                                value="by_service">
+                            <label class="form-check-label w-100" for="rep4">
+                                <span class="d-block h6 fw-bold text-info"><i class="bi bi-hdd-network"></i> Por
+                                    Servicio</span>
+                                <small class="text-muted">Inventario por tipo de servicio.</small>
+                            </label>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- SECURITY AUDITS SECTION -->
+                <h6 class="text-muted mb-2"><i class="bi bi-shield-exclamation text-danger"></i> Auditorías de Seguridad
+                </h6>
+                <div class="row g-3 mb-4">
+
+                    <div class="col-md-4">
+                        <div class="form-check card h-100 p-3 border-danger hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep_insecure"
+                                value="insecure">
+                            <label class="form-check-label w-100" for="rep_insecure">
+                                <span class="d-block h6 fw-bold text-danger"><i
+                                        class="bi bi-exclamation-triangle-fill"></i> All-All-All</span>
+                                <small class="text-muted">Origen, Destino y Servicio ANY.</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check card h-100 p-3 border-danger-subtle hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep_any_src"
+                                value="any_source">
+                            <label class="form-check-label w-100" for="rep_any_src">
+                                <span class="d-block h6 fw-bold text-danger"><i class="bi bi-arrow-right-circle"></i>
+                                    Origen ANY</span>
+                                <small class="text-muted">Políticas con origen abierto.</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check card h-100 p-3 border-danger-subtle hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep_any_dst"
+                                value="any_dest">
+                            <label class="form-check-label w-100" for="rep_any_dst">
+                                <span class="d-block h6 fw-bold text-danger"><i class="bi bi-arrow-left-circle"></i>
+                                    Destino ANY</span>
+                                <small class="text-muted">Políticas con destino abierto.</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check card h-100 p-3 border-danger-subtle hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep_any_svc"
+                                value="any_service">
+                            <label class="form-check-label w-100" for="rep_any_svc">
+                                <span class="d-block h6 fw-bold text-danger"><i class="bi bi-gear"></i> Servicio
+                                    ANY</span>
+                                <small class="text-muted">Políticas con servicio abierto.</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check card h-100 p-3 border-warning hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep_no_log"
+                                value="no_logging">
+                            <label class="form-check-label w-100" for="rep_no_log">
+                                <span class="d-block h6 fw-bold text-warning"><i class="bi bi-journal-x"></i> Sin
+                                    Logging</span>
+                                <small class="text-muted">Políticas sin registro de tráfico.</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check card h-100 p-3 border-secondary hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep_disabled"
+                                value="disabled_policies">
+                            <label class="form-check-label w-100" for="rep_disabled">
+                                <span class="d-block h6 fw-bold text-secondary"><i class="bi bi-toggle-off"></i>
+                                    Deshabilitadas</span>
+                                <small class="text-muted">Políticas inactivas (limpieza).</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check card h-100 p-3 border-warning-subtle hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep_no_ips"
+                                value="no_ips">
+                            <label class="form-check-label w-100" for="rep_no_ips">
+                                <span class="d-block h6 fw-bold text-warning"><i class="bi bi-shield-slash"></i> Sin
+                                    IPS</span>
+                                <small class="text-muted">Sin perfil de intrusiones.</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check card h-100 p-3 border-warning-subtle hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep_no_av"
+                                value="no_av">
+                            <label class="form-check-label w-100" for="rep_no_av">
+                                <span class="d-block h6 fw-bold text-warning"><i class="bi bi-bug"></i> Sin
+                                    Antivirus</span>
+                                <small class="text-muted">Sin perfil de antivirus.</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check card h-100 p-3 border-warning-subtle hover-shadow">
+                            <input class="form-check-input" type="radio" name="report_type" id="rep_no_ssl"
+                                value="no_ssl_inspection">
+                            <label class="form-check-label w-100" for="rep_no_ssl">
+                                <span class="d-block h6 fw-bold text-warning"><i class="bi bi-lock-fill"></i> Sin SSL
+                                    Inspection</span>
+                                <small class="text-muted">Sin inspección de tráfico cifrado.</small>
+                            </label>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- CUSTOM REPORT BUILDER SECTION -->
+                <div class="card mb-4 mt-4 border-0"
+                    style="background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);">
+                    <div class="card-header bg-dark text-white cursor-pointer" data-bs-toggle="collapse"
+                        data-bs-target="#customBuilder">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-bold"><i class="bi bi-sliders"></i> Reporte Personalizado</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                    </div>
+                    <div class="collapse" id="customBuilder">
+                        <div class="card-body">
+                            <p class="text-muted small mb-3">Crea un reporte con filtros personalizados. Al seleccionar
+                                esta opción, los filtros de arriba serán ignorados.</p>
+
+                            <div class="row g-3">
+                                <div class="col-md-12">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="report_type" id="rep_custom"
+                                            value="custom">
+                                        <label class="form-check-label fw-bold" for="rep_custom">
+                                            <i class="bi bi-wrench"></i> Usar Filtros Personalizados
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Acción</label>
+                                    <select name="custom_action" class="form-select form-select-sm">
+                                        <option value="">Todas</option>
+                                        <option value="ACCEPT">ACCEPT</option>
+                                        <option value="DENY">DENY</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Origen Interface</label>
+                                    <input type="text" name="custom_src_intf" class="form-control form-control-sm"
+                                        placeholder="Ej: port1, any">
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Origen Address</label>
+                                    <input type="text" name="custom_src_addr" class="form-control form-control-sm"
+                                        placeholder="Ej: all, 192.168">
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Destino Interface</label>
+                                    <input type="text" name="custom_dst_intf" class="form-control form-control-sm"
+                                        placeholder="Ej: wan1, any">
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Destino Address</label>
+                                    <input type="text" name="custom_dst_addr" class="form-control form-control-sm"
+                                        placeholder="Ej: all, 10.0">
+                                </div>
+
+                                <div class="col-md-4 mt-3">
+                                    <label class="form-label small fw-bold">Servicio contiene</label>
+                                    <input type="text" name="custom_svc" class="form-control form-control-sm"
+                                        placeholder="Ej: HTTP, ALL">
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Tráfico</label>
+                                    <select name="custom_traffic" class="form-select form-select-sm">
+                                        <option value="">Cualquiera</option>
+                                        <option value="zero">Sin uso (0 bytes)</option>
+                                        <option value="nonzero">Con uso</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Logging</label>
+                                    <select name="custom_logging" class="form-select form-select-sm">
+                                        <option value="">Cualquiera</option>
+                                        <option value="disabled">Sin logging</option>
+                                        <option value="enabled">Con logging</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Perfil IPS</label>
+                                    <select name="custom_ips" class="form-select form-select-sm">
+                                        <option value="">Cualquiera</option>
+                                        <option value="missing">Sin IPS</option>
+                                        <option value="present">Con IPS</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Perfil AV</label>
+                                    <select name="custom_av" class="form-select form-select-sm">
+                                        <option value="">Cualquiera</option>
+                                        <option value="missing">Sin Antivirus</option>
+                                        <option value="present">Con Antivirus</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">SSL Inspection</label>
+                                    <select name="custom_ssl" class="form-select form-select-sm">
+                                        <option value="">Cualquiera</option>
+                                        <option value="missing">Sin SSL</option>
+                                        <option value="present">Con SSL</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Duplicados</label>
+                                    <div class="form-check form-switch mt-1">
+                                        <input class="form-check-input" type="checkbox" name="custom_duplicates"
+                                            id="customDupes" value="on">
+                                        <label class="form-check-label small" for="customDupes">Buscar en mismo
+                                            VDOM</label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">NAT (Duplicados)</label>
+                                    <div class="form-check form-switch mt-1">
+                                        <input class="form-check-input" type="checkbox" name="custom_ignore_nat"
+                                            id="customIgnoreNat" value="on">
+                                        <label class="form-check-label small" for="customIgnoreNat">Ignorar NAT</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="my-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Nombre del Reporte</label>
+                                    <input type="text" name="custom_name" class="form-control form-control-sm"
+                                        placeholder="Ej: Auditoría Q4 2024">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 text-end">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="bi bi-download"></i> Generar Reporte
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .hover-shadow:hover {
+        background-color: #f8f9fa;
+        cursor: pointer;
+        border-color: #2B88DA !important;
+    }
+
+    .cursor-pointer {
+        cursor: pointer;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const deviceSelect = document.querySelector('select[name="device_id"]');
+        const vdomSelect = document.getElementById('vdomSelect');
+        const selectAllCheckbox = document.getElementById('selectAllVdoms');
+
+        // Load VDOMs when device changes
+        deviceSelect.addEventListener('change', async function () {
+            const deviceId = this.value;
+            if (!deviceId) return;
+
+            vdomSelect.innerHTML = '<option disabled>Cargando VDOMs...</option>';
+
+            try {
+                const response = await fetch(`/admin/devices/${deviceId}/vdoms/json`);
+                const vdoms = await response.json();
+
+                vdomSelect.innerHTML = '';
+
+                if (vdoms.length === 0) {
+                    vdomSelect.innerHTML = '<option value="">Sin VDOMs configurados</option>';
+                } else {
+                    vdoms.forEach(v => {
+                        const option = document.createElement('option');
+                        option.value = v.name;
+                        option.textContent = v.name;
+                        option.selected = selectAllCheckbox.checked;
+                        vdomSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                vdomSelect.innerHTML = '<option disabled>Error cargando VDOMs</option>';
+            }
+        });
+
+        // Select All functionality
+        selectAllCheckbox.addEventListener('change', function () {
+            const options = vdomSelect.options;
+            for (let i = 0; i < options.length; i++) {
+                if (!options[i].disabled) {
+                    options[i].selected = this.checked;
+                }
+            }
+        });
+
+        // Update "Select All" checkbox when individual items change
+        vdomSelect.addEventListener('change', function () {
+            const options = Array.from(this.options).filter(o => !o.disabled);
+            const allSelected = options.every(o => o.selected);
+            selectAllCheckbox.checked = allSelected;
+        });
+    });
+</script>
+{% endblock %}

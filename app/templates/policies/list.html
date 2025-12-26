@@ -1,0 +1,401 @@
+{% extends 'layout.html' %}
+
+{% macro sortable_header(title, field_name, current_sort, current_order, filters, current_per_page) %}
+{% set new_order = 'asc' if current_order == 'desc' else 'desc' %}
+{% set icon = 'bi-arrow-down-up' %}
+{% if current_sort == field_name %}
+{% set icon = 'bi-sort-down' if current_order == 'desc' else 'bi-sort-up' %}
+{% endif %}
+
+<a href="{{ url_for('policy.list_policies', sort=field_name, order=new_order, per_page=current_per_page, **filters) }}"
+    class="text-dark text-decoration-none fw-bold small text-uppercase">
+    {{ title }} <i class="bi {{ icon }} text-muted"></i>
+</a>
+{% endmacro %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Explorador de Políticas</h3>
+    <a href="{{ url_for('policy.import_policies') }}" class="btn btn-outline-primary">
+        <i class="bi bi-cloud-upload"></i> Importar JSON
+    </a>
+</div>
+
+<div class="card mb-4 shadow-sm border-0">
+    <div class="card-header bg-white cursor-pointer" data-bs-toggle="collapse" data-bs-target="#filterPanel">
+        <div class="d-flex justify-content-between">
+            <span class="fw-bold text-primary"><i class="bi bi-sliders"></i> Filtros y Auditoría</span>
+            <i class="bi bi-chevron-down"></i>
+        </div>
+    </div>
+    <div class="collapse show" id="filterPanel">
+        <div class="card-body bg-light">
+            <form method="GET" action="{{ url_for('policy.list_policies') }}">
+                <input type="hidden" name="per_page" value="{{ current_per_page }}">
+
+                <div class="row g-2">
+                    <div class="col-md-9">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                            <input type="text" name="q" class="form-control" placeholder="Buscar por ID, Nombre..."
+                                value="{{ filters.q or '' }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <select name="device_id" class="form-select form-select-sm">
+                            <option value="">Todos los Equipos</option>
+                            {% for eq in equipos %}
+                            <option value="{{ eq.id }}" {% if filters.device_id==eq.id|string %}selected{% endif %}>
+                                {{ eq.nombre }} (SN: {{ eq.serial }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <select name="vdom" class="form-select form-select-sm">
+                            <option value="">Todos los VDOMs</option>
+                            {% for v in distinct_vdoms %}
+                            <option value="{{ v }}" {% if filters.vdom==v %}selected{% endif %}>{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-2"><input type="text" name="src_intf" class="form-control form-control-sm"
+                            placeholder="In Interface" value="{{ filters.src_intf or '' }}"></div>
+                    <div class="col-md-2"><input type="text" name="dst_intf" class="form-control form-control-sm"
+                            placeholder="Out Interface" value="{{ filters.dst_intf or '' }}"></div>
+                    <div class="col-md-2"><input type="text" name="src_addr" class="form-control form-control-sm"
+                            placeholder="Source Addr" value="{{ filters.src_addr or '' }}"></div>
+                    <div class="col-md-2"><input type="text" name="dst_addr" class="form-control form-control-sm"
+                            placeholder="Dest Addr" value="{{ filters.dst_addr or '' }}"></div>
+                    <div class="col-md-2"><input type="text" name="service" class="form-control form-control-sm"
+                            placeholder="Service" value="{{ filters.service or '' }}"></div>
+
+                    <div class="col-md-2">
+                        <select name="action" class="form-select form-select-sm">
+                            <option value="">Acción: Todas</option>
+                            <option value="ACCEPT" {% if filters.action=='ACCEPT' %}selected{% endif %}>ACCEPT</option>
+                            <option value="DENY" {% if filters.action=='DENY' %}selected{% endif %}>DENY</option>
+                        </select>
+                    </div>
+
+                    <hr class="my-2">
+
+                    <div class="col-md-8 d-flex align-items-center gap-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="zero_bytes" id="chkZeroBytes" {% if
+                                filters.zero_bytes=='on' %}checked{% endif %}>
+                            <label class="form-check-label small" for="chkZeroBytes">0 Bytes</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="zero_hits" id="chkZeroHits" {% if
+                                filters.zero_hits=='on' %}checked{% endif %}>
+                            <label class="form-check-label small" for="chkZeroHits">0 Hits</label>
+                        </div>
+
+                        <div class="form-check form-switch">
+                            <input class="form-check-input border-info" type="checkbox" name="show_nat" id="chkShowNAT"
+                                {% if filters.show_nat=='on' %}checked{% endif %}>
+                            <label class="form-check-label small fw-bold text-primary" for="chkShowNAT">Con NAT</label>
+                        </div>
+
+                        <div class="vr"></div>
+
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="show_dupes" id="chkDupes" {% if
+                                filters.show_dupes=='on' %}checked{% endif %}>
+                            <label class="form-check-label small text-danger fw-bold" for="chkDupes">Ver
+                                Repetidos</label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4 text-end">
+                        <a href="{{ url_for('policy.list_policies') }}"
+                            class="btn btn-outline-secondary btn-sm me-2">Limpiar</a>
+                        <button type="submit" class="btn btn-primary btn-sm px-4">Filtrar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('policy.generate_script') }}">
+    <div class="d-flex justify-content-between mb-2">
+        <div class="btn-group">
+            <button type="submit" name="action_type" value="disable" class="btn btn-warning btn-sm">Script
+                Disable</button>
+            <button type="submit" name="action_type" value="delete" class="btn btn-danger btn-sm"
+                onclick="return confirm('¿Seguro?')">Script Delete</button>
+        </div>
+        <div class="d-flex align-items-center">
+            <label for="perPageSelectTop" class="small text-muted me-2 fw-bold">Mostrar:</label>
+            <select id="perPageSelectTop" class="form-select form-select-sm" style="width: 80px;"
+                onchange="changePerPage(this.value)">
+                <option value="8" {% if current_per_page==8 %}selected{% endif %}>8</option>
+                <option value="16" {% if current_per_page==16 %}selected{% endif %}>16</option>
+                <option value="32" {% if current_per_page==32 %}selected{% endif %}>32</option>
+                <option value="64" {% if current_per_page==64 %}selected{% endif %}>64</option>
+                <option value="128" {% if current_per_page==128 %}selected{% endif %}>128</option>
+                <option value="256" {% if current_per_page==256 %}selected{% endif %}>256</option>
+                <option value="512" {% if current_per_page==512 %}selected{% endif %}>512</option>
+            </select>
+            <span class="small text-muted ms-2">filas</span>
+        </div>
+        <span class="text-muted small align-self-center">
+            Mostrando {{ pagination.items|length }} de <strong>{{ pagination.total }}</strong> registros
+            {% if filters.show_dupes == 'on' %}<span class="badge bg-danger ms-2">Modo Duplicados</span>{% endif %}
+        </span>
+    </div>
+
+    <div class="table-responsive bg-white border rounded shadow-sm">
+        <table class="table table-hover table-sm mb-0 align-middle"
+            style="font-size: 0.85rem; table-layout: fixed; width: 100%;">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 40px; min-width: 40px;"><input type="checkbox" onclick="toggleAll(this)"></th>
+
+                    <th style="width: 120px;">{{ sortable_header('Equipo / VDOM', 'vdom', current_sort, current_order,
+                        filters, current_per_page) }}</th>
+                    <th style="width: 60px;">{{ sortable_header('ID', 'id', current_sort, current_order, filters,
+                        current_per_page) }}</th>
+                    <th style="width: 80px;">{{ sortable_header('Acción', 'action', current_sort, current_order,
+                        filters, current_per_page) }}</th>
+                    <th style="width: 100px;">{{ sortable_header('Int. In', 'src_intf', current_sort, current_order,
+                        filters, current_per_page) }}</th>
+                    <th style="width: 150px;">Src Addr</th>
+                    <th style="width: 100px;">{{ sortable_header('Int. Out', 'dst_intf', current_sort, current_order,
+                        filters, current_per_page) }}</th>
+                    <th style="width: 150px;">Dest Addr</th>
+
+                    <th style="width: 100px;">{{ sortable_header('Servicio', 'service', current_sort, current_order,
+                        filters, current_per_page) }}</th>
+                    <th style="width: 80px;">{{ sortable_header('Uso', 'bytes', current_sort, current_order, filters,
+                        current_per_page) }}</th>
+                    <th style="width: 70px;">{{ sortable_header('Hits', 'hits', current_sort, current_order, filters,
+                        current_per_page) }}</th>
+                    <th style="width: 60px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set ns = namespace(prev_group=None, group_index=0, seen_groups={}) %}
+                {% for p in pagination.items %}
+                {% if filters.show_dupes == 'on' and p._group_key is defined %}
+                {% if p._group_key != ns.prev_group %}
+                {% if ns.prev_group is not none %}
+                <tr class="group-separator">
+                    <td colspan="12" class="p-0">
+                        <hr class="my-0 border-dark opacity-50">
+                    </td>
+                </tr>
+                {% endif %}
+                {% if p._group_key not in ns.seen_groups %}
+                {% set _ = ns.seen_groups.update({p._group_key: ns.group_index}) %}
+                {% set ns.group_index = ns.group_index + 1 %}
+                {% endif %}
+                {% set ns.prev_group = p._group_key %}
+                {% endif %}
+                {% set color_class = 'table-warning' if ns.seen_groups[p._group_key] % 2 == 0 else 'table-info' %}
+                <tr
+                    class="{{ color_class }} border-start border-4 {% if ns.seen_groups[p._group_key] % 2 == 0 %}border-warning{% else %}border-info{% endif %}">
+                    {% else %}
+                <tr>
+                    {% endif %}
+                    <td><input type="checkbox" name="selected_policies" value="{{ p.uuid }}" class="policy-chk"></td>
+
+                    <td>
+                        <div class="fw-bold text-break" style="font-size: 0.9em; line-height: 1.1;">{{ p.equipo.nombre
+                            }}</div>
+                        <span class="badge bg-light text-dark border mt-1">{{ p.vdom }}</span>
+                        {% if filters.show_dupes == 'on' and duplicate_groups and p._group_key is defined %}
+                        <span class="badge bg-danger ms-1" title="Grupo de duplicados">
+                            <i class="bi bi-files"></i> {{ duplicate_groups[p._group_key]|length }}
+                        </span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <span class="badge bg-dark">{{ p.policy_id }}</span>
+                        {% if p.name %}
+                        <div class="text-muted text-truncate" style="font-size: 0.7em; max-width: 60px;"
+                            title="{{ p.name }}">
+                            {{ p.name }}
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if p.action == 'ACCEPT' %}
+                        <span class="badge bg-success">ACC</span>
+                        {% else %}
+                        <span class="badge bg-danger">DEN</span>
+                        {% endif %}
+
+                        {% if p.nat == 'Enabled' %}
+                        {% if p.raw_data.get('IP Pool') %}
+                        <span class="badge bg-warning text-dark" style="font-size: 0.6em" title="IP Pool Activo">NAT
+                            POOL</span>
+                        {% else %}
+                        <span class="badge bg-info text-dark" style="font-size: 0.6em">NAT</span>
+                        {% endif %}
+                        {% endif %}
+                    </td>
+
+                    <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                        title="{{ p.src_intf }}">
+                        <small class="badge bg-dark">{{ p.src_intf|truncate(15) }}</small>
+                    </td>
+
+                    <td class="text-truncate" style="overflow: hidden;" title="{{ p.src_addr }}">
+                        <small>{{ p.src_addr }}</small>
+                    </td>
+
+                    <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                        title="{{ p.dst_intf }}">
+                        <small class="badge bg-secondary">{{ p.dst_intf|truncate(15) }}</small>
+                    </td>
+
+                    <td class="text-truncate" style="overflow: hidden;">
+                        <small
+                            title="{% set dests = p.raw_data.get('Destination') %}{% if dests %}{% if dests is string %}{{ dests }}{% else %}{{ dests|join(', ') }}{% endif %}{% else %}{{ p.dst_addr }}{% endif %}">
+                            {% set dests = p.raw_data.get('Destination') %}
+                            {% if dests %}
+                            {% if dests is string %}{{ dests }}{% else %}{{ dests|join(', ') }}{% endif %}
+                            {% else %}
+                            {{ p.dst_addr }}
+                            {% endif %}
+                        </small>
+                    </td>
+
+                    <td class="text-truncate" style="max-width: 100px;" title="{{ p.service }}">
+                        {{ p.service }}
+                    </td>
+
+                    <td class="{{ 'text-danger fw-bold' if p.bytes_int == 0 }}">
+                        {{ p.bytes_raw }}
+                    </td>
+
+                    <td class="{{ 'text-danger' if p.hit_count == 0 }}">
+                        {{ p.hit_count }}
+                    </td>
+
+                    <td>
+                        <button class="btn btn-sm btn-outline-info btn-details" data-uuid="{{ p.uuid }}"
+                            data-pid="{{ p.policy_id }}">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        <a href="{{ url_for('history.policy_history', policy_uuid=p.uuid) }}"
+                            class="btn btn-sm btn-outline-secondary" title="Historial">
+                            <i class="bi bi-clock-history"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="11" class="text-center py-4 text-muted">No se encontraron resultados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</form>
+
+<!-- Pagination -->
+{% if pagination.pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination justify-content-center">
+        <!-- Previous -->
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link"
+                href="?page={{ pagination.prev_num }}&per_page={{ current_per_page }}{% for k,v in filters.items() %}&{{ k }}={{ v }}{% endfor %}&sort={{ current_sort }}&order={{ current_order }}">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </li>
+
+        <!-- Page Numbers -->
+        {% for p in pagination.iter_pages() %}
+        {% if p %}
+        {% if p == pagination.page %}
+        <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+        {% else %}
+        <li class="page-item">
+            <a class="page-link"
+                href="?page={{ p }}&per_page={{ current_per_page }}{% for k,v in filters.items() %}&{{ k }}={{ v }}{% endfor %}&sort={{ current_sort }}&order={{ current_order }}">{{
+                p }}</a>
+        </li>
+        {% endif %}
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">...</span></li>
+        {% endif %}
+        {% endfor %}
+
+        <!-- Next -->
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link"
+                href="?page={{ pagination.next_num }}&per_page={{ current_per_page }}{% for k,v in filters.items() %}&{{ k }}={{ v }}{% endfor %}&sort={{ current_sort }}&order={{ current_order }}">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+    </ul>
+    <div class="text-center text-muted small">
+        Página {{ pagination.page }} de {{ pagination.pages }}
+    </div>
+</nav>
+{% endif %}
+
+<div class="modal fade" id="detailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Detalles ID <span id="modalPolicyId"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body bg-light">
+                <div id="loadingSpinner" class="text-center py-5">
+                    <div class="spinner-border text-primary"></div>
+                </div>
+                <pre id="jsonContent" class="p-3 bg-dark text-warning rounded small" style="display:none;"></pre>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary"
+                    data-bs-dismiss="modal">Cerrar</button></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Event Delegation for Details Button
+        document.body.addEventListener('click', function (e) {
+            let btn = e.target.closest('.btn-details');
+            if (btn) {
+                e.preventDefault();
+                showDetails(btn.dataset.uuid, btn.dataset.pid);
+            }
+        });
+    });
+
+    function toggleAll(src) {
+        document.querySelectorAll('.policy-chk').forEach(c => c.checked = src.checked);
+    }
+
+    function changePerPage(newVal) {
+        let url = new URL(window.location.href);
+        url.searchParams.set('per_page', newVal);
+        url.searchParams.set('page', 1);
+        window.location.href = url.toString();
+    }
+
+    function showDetails(uuid, pid) {
+        new bootstrap.Modal(document.getElementById('detailsModal')).show();
+        document.getElementById('modalPolicyId').innerText = pid;
+        document.getElementById('loadingSpinner').style.display = 'block';
+        document.getElementById('jsonContent').style.display = 'none';
+        fetch(`/policies/${uuid}/details`).then(r => r.json()).then(d => {
+            document.getElementById('loadingSpinner').style.display = 'none';
+            document.getElementById('jsonContent').style.display = 'block';
+            document.getElementById('jsonContent').innerText = JSON.stringify(d, null, 2);
+        });
+    }
+</script>
+{% endblock %}
