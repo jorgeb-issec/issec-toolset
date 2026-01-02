@@ -96,6 +96,7 @@ def import_device_config():
                 # Update existing device provided by user request
                 existing_device.hostname = data.get('hostname')
                 existing_device.config_data = data.get('config_data')
+                existing_device.raw_config = content  # Update raw config
                 existing_device.site_id = uuid.UUID(target_site_id)
                 # We do not overwrite 'nombre' to preserve user custom alias if set, 
                 # unless it matches the old serial/hostname? Let's keep it simple and just update tech specs.
@@ -112,13 +113,18 @@ def import_device_config():
                 g.tenant_session.commit()
                 flash(f"Equipo {existing_device.hostname} actualizado con la nueva configuración.", "info")
             else:
+                # Extract HA status from parsed config
+                ha_config = data.get('config_data', {}).get('ha', {})
+                ha_enabled = ha_config.get('enabled', False)
+                
                 new_device = Equipo(
                     nombre=data.get('hostname') or data.get('serial'), # Default name
                     hostname=data.get('hostname'),
                     serial=data['serial'],
                     site_id=uuid.UUID(target_site_id),
-                    ha_habilitado=False,
-                    config_data=data.get('config_data') # Save parsed detailed config
+                    ha_habilitado=ha_enabled,
+                    config_data=data.get('config_data'), # Save parsed detailed config
+                    raw_config=content  # Save full raw config file
                 )
                 # Add device to session and flush to get ID
                 g.tenant_session.add(new_device)
@@ -363,7 +369,10 @@ def edit_vdom(vdom_id):
 @login_required
 @company_required
 def refresh_device_config(device_id):
-    """Actualizar la configuración de un equipo existente con un nuevo archivo .config"""
+    """Upload config file and show preview with delta before applying"""
+    import json
+    import tempfile
+    
     device = g.tenant_session.query(Equipo).get(device_id)
     if not device:
         flash("Equipo no encontrado", "danger")
@@ -381,35 +390,203 @@ def refresh_device_config(device_id):
     if file:
         content = file.read().decode('utf-8', errors='ignore')
         try:
-            # Parse Config
-            data = ConfigParserService.parse_config(content)
+            # Parse new config
+            new_data = ConfigParserService.parse_config(content)
+            new_config = new_data.get('config_data', {})
             
-            # Update device config_data
-            device.config_data = data.get('config_data')
-            device.hostname = data.get('hostname') or device.hostname
+            # Calculate delta with current config
+            current_config = device.config_data or {}
+            delta = calculate_config_delta(current_config, new_config)
             
-            # Update HA status from parsed config
-            ha_info = data.get('config_data', {}).get('ha', {})
-            device.ha_habilitado = ha_info.get('enabled', False)
+            # Save to temp file instead of session (config too big for cookies)
+            pending_data = {
+                'device_id': str(device_id),
+                'raw_config': content,
+                'config_data': new_config,
+                'hostname': new_data.get('hostname'),
+                'delta': delta
+            }
             
-            # Sync VDOMs
-            if data['config_data'].get('vdoms'):
-                existing_vdoms = g.tenant_session.query(VDOM).filter_by(device_id=device.id).all()
-                existing_names = {v.name for v in existing_vdoms}
-                for v_name in data['config_data']['vdoms']:
-                    if v_name not in existing_names:
-                        new_vdom = VDOM(device_id=device.id, name=v_name, comments="Imported from Global Config")
-                        g.tenant_session.add(new_vdom)
+            # Create temp file with unique name based on device_id
+            temp_dir = os.path.join(current_app.instance_path, 'pending_configs')
+            os.makedirs(temp_dir, exist_ok=True)
+            temp_file = os.path.join(temp_dir, f"{device_id}.json")
             
-            g.tenant_session.commit()
+            with open(temp_file, 'w') as f:
+                json.dump(pending_data, f)
             
-            ha_mode = ha_info.get('mode', 'standalone')
-            ha_msg = f" | HA: {ha_mode.upper()}" if ha_info.get('enabled') else ""
-            flash(f"Configuración de '{device.hostname}' actualizada correctamente.{ha_msg}", "success")
+            # Store only the reference in session
+            session['pending_config_file'] = temp_file
+            
+            return redirect(url_for('device.confirm_config_update', device_id=device_id))
             
         except Exception as e:
-            flash(f"Error actualizando configuración: {str(e)}", "danger")
-            g.tenant_session.rollback()
+            flash(f"Error parseando configuración: {str(e)}", "danger")
     
     return redirect(url_for('device.view_device', device_id=device_id))
 
+
+def calculate_config_delta(old_config, new_config):
+    """Calculate differences between two config versions"""
+    delta = {
+        'interfaces': {'added': [], 'removed': [], 'modified': []},
+        'vdoms': {'added': [], 'removed': []},
+        'ha_changed': False,
+        'ha_old': None,
+        'ha_new': None,
+    }
+    
+    # Compare interfaces
+    old_intfs = {i['name']: i for i in old_config.get('interfaces', [])}
+    new_intfs = {i['name']: i for i in new_config.get('interfaces', [])}
+    
+    old_names = set(old_intfs.keys())
+    new_names = set(new_intfs.keys())
+    
+    delta['interfaces']['added'] = list(new_names - old_names)
+    delta['interfaces']['removed'] = list(old_names - new_names)
+    
+    # Check modified (same name but different data)
+    for name in old_names & new_names:
+        if old_intfs[name] != new_intfs[name]:
+            delta['interfaces']['modified'].append(name)
+    
+    # Compare VDOMs
+    old_vdoms = set(old_config.get('vdoms', []))
+    new_vdoms = set(new_config.get('vdoms', []))
+    delta['vdoms']['added'] = list(new_vdoms - old_vdoms)
+    delta['vdoms']['removed'] = list(old_vdoms - new_vdoms)
+    
+    # Compare HA
+    old_ha = old_config.get('ha', {})
+    new_ha = new_config.get('ha', {})
+    if old_ha != new_ha:
+        delta['ha_changed'] = True
+        delta['ha_old'] = old_ha
+        delta['ha_new'] = new_ha
+    
+    return delta
+
+
+@device_bp.route('/admin/devices/<uuid:device_id>/confirm-config')
+@login_required
+@company_required
+def confirm_config_update(device_id):
+    """Show preview of config changes before applying"""
+    import json
+    
+    device = g.tenant_session.query(Equipo).get(device_id)
+    if not device:
+        flash("Equipo no encontrado", "danger")
+        return redirect(url_for('device.list_devices'))
+    
+    # Read from temp file
+    temp_file = session.get('pending_config_file')
+    if not temp_file or not os.path.exists(temp_file):
+        flash("No hay configuración pendiente para confirmar", "warning")
+        return redirect(url_for('device.view_device', device_id=device_id))
+    
+    try:
+        with open(temp_file, 'r') as f:
+            pending = json.load(f)
+        
+        if pending.get('device_id') != str(device_id):
+            flash("No hay configuración pendiente para este equipo", "warning")
+            return redirect(url_for('device.view_device', device_id=device_id))
+        
+        return render_template('admin/devices/confirm_config.html', 
+                              device=device, 
+                              delta=pending['delta'],
+                              new_config=pending['config_data'],
+                              new_hostname=pending.get('hostname'))
+    except Exception as e:
+        flash(f"Error leyendo configuración pendiente: {str(e)}", "danger")
+        return redirect(url_for('device.view_device', device_id=device_id))
+
+
+@device_bp.route('/admin/devices/<uuid:device_id>/apply-config', methods=['POST'])
+@login_required
+@company_required
+def apply_config_update(device_id):
+    """Apply the pending config update after confirmation"""
+    import json
+    from app.models.config_history import ConfigHistory
+    
+    device = g.tenant_session.query(Equipo).get(device_id)
+    if not device:
+        flash("Equipo no encontrado", "danger")
+        return redirect(url_for('device.list_devices'))
+    
+    # Read from temp file
+    temp_file = session.get('pending_config_file')
+    if not temp_file or not os.path.exists(temp_file):
+        flash("No hay configuración pendiente para aplicar", "warning")
+        return redirect(url_for('device.view_device', device_id=device_id))
+    
+    try:
+        with open(temp_file, 'r') as f:
+            pending = json.load(f)
+        
+        if pending.get('device_id') != str(device_id):
+            flash("No hay configuración pendiente para este equipo", "warning")
+            return redirect(url_for('device.view_device', device_id=device_id))
+        
+        # Save current config to history (if exists)
+        if device.config_data or device.raw_config:
+            history_entry = ConfigHistory(
+                device_id=device.id,
+                change_type='update' if device.config_data else 'initial',
+                raw_config=device.raw_config,
+                config_data=device.config_data,
+                delta_summary=pending['delta']
+            )
+            g.tenant_session.add(history_entry)
+        
+        # Apply new config
+        device.config_data = pending['config_data']
+        device.raw_config = pending['raw_config']
+        device.hostname = pending.get('hostname') or device.hostname
+        
+        # Update HA status
+        ha_info = pending['config_data'].get('ha', {})
+        device.ha_habilitado = ha_info.get('enabled', False)
+        
+        # Sync VDOMs
+        if pending['config_data'].get('vdoms'):
+            existing_vdoms = g.tenant_session.query(VDOM).filter_by(device_id=device.id).all()
+            existing_names = {v.name for v in existing_vdoms}
+            for v_name in pending['config_data']['vdoms']:
+                if v_name not in existing_names:
+                    new_vdom = VDOM(device_id=device.id, name=v_name, comments="Imported from Config Update")
+                    g.tenant_session.add(new_vdom)
+        
+        g.tenant_session.commit()
+        
+        # Clean up temp file
+        session.pop('pending_config_file', None)
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+        
+        ha_mode = ha_info.get('mode', 'standalone')
+        ha_msg = f" | HA: {ha_mode.upper()}" if ha_info.get('enabled') else ""
+        flash(f"Configuración de '{device.hostname}' actualizada correctamente.{ha_msg}", "success")
+        
+    except Exception as e:
+        flash(f"Error aplicando configuración: {str(e)}", "danger")
+        g.tenant_session.rollback()
+    
+    return redirect(url_for('device.view_device', device_id=device_id))
+
+
+@device_bp.route('/admin/devices/<uuid:device_id>/cancel-config')
+@login_required
+@company_required
+def cancel_config_update(device_id):
+    """Cancel pending config update"""
+    # Clean up temp file
+    temp_file = session.pop('pending_config_file', None)
+    if temp_file and os.path.exists(temp_file):
+        os.remove(temp_file)
+    
+    flash("Actualización de configuración cancelada", "info")
+    return redirect(url_for('device.view_device', device_id=device_id))

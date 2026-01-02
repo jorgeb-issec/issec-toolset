@@ -46,7 +46,7 @@
                             <option value="">Todos los Equipos</option>
                             {% for eq in equipos %}
                             <option value="{{ eq.id }}" {% if filters.device_id==eq.id|string %}selected{% endif %}>
-                                {{ eq.nombre }} (SN: {{ eq.serial }})
+                                {{ eq.nombre }} (SN: {{ eq.serial }}){% if eq.site %} - {{ eq.site.nombre }}{% endif %}
                             </option>
                             {% endfor %}
                         </select>
@@ -106,7 +106,7 @@
                             <input class="form-check-input" type="checkbox" name="show_dupes" id="chkDupes" {% if
                                 filters.show_dupes=='on' %}checked{% endif %}>
                             <label class="form-check-label small text-danger fw-bold" for="chkDupes">Ver
-                                Repetidos</label>
+                                Duplicados</label>
                         </div>
                     </div>
 

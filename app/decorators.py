@@ -1,21 +1,26 @@
 from functools import wraps
-from flask import session, redirect, url_for, flash, abort
+from flask import session, redirect, url_for, flash, abort, g
 from flask_login import current_user
 from app.models.core import Company
 
 def company_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Allow admin user or users with global role
-        if current_user.is_authenticated:
-            if current_user.username == 'admin':
-                return f(*args, **kwargs)
-            if current_user.get_global_role():
-                return f(*args, **kwargs)
-        
+        # Even for admin/global roles, we need a company_id in session
+        # to ensure g.tenant_session is initialized for tenant-specific routes.
         if 'company_id' not in session:
-            flash('Por favor seleccione una empresa.', 'warning')
+            flash('Por favor seleccione una empresa para acceder a esta sección.', 'warning')
             return redirect(url_for('auth.select_company'))
+            
+        # Extra safety check to ensure the session actually loaded correctly
+        if not hasattr(g, 'tenant_session') or g.tenant_session is None:
+            from app.services.tenant_service import TenantService
+            try:
+                g.tenant_session = TenantService.get_session(session['company_id'])
+            except Exception:
+                flash('Error al acceder a los datos de la empresa. Por favor, intente de nuevo.', 'danger')
+                return redirect(url_for('auth.select_company'))
+                
         return f(*args, **kwargs)
     return decorated_function
 

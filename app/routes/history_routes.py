@@ -116,3 +116,55 @@ def policy_history(policy_uuid):
                            distinct_vdoms=[],
                            current_vdom=None,
                            title=f"Historial de Política {policy.policy_id if policy else 'Deleted'}")
+
+
+@history_bp.route('/device/<uuid:device_id>/config')
+@login_required
+@company_required
+def config_history(device_id):
+    """Shows configuration history for a device"""
+    from app.models.config_history import ConfigHistory
+    
+    device = g.tenant_session.query(Equipo).get(device_id)
+    if not device:
+        abort(404)
+    
+    # Get all config history entries
+    history_items = g.tenant_session.query(ConfigHistory)\
+        .filter_by(device_id=device_id)\
+        .order_by(desc(ConfigHistory.change_date))\
+        .all()
+    
+    return render_template('admin/devices/config_history.html', 
+                           device=device, 
+                           history_items=history_items,
+                           title=f"Historial de Configuración - {device.hostname}")
+
+
+@history_bp.route('/config/<uuid:history_id>/export')
+@login_required
+@company_required
+def export_config_history(history_id):
+    """Export a historical config as a downloadable file"""
+    from flask import Response
+    from app.models.config_history import ConfigHistory
+    
+    history_item = g.tenant_session.query(ConfigHistory).get(history_id)
+    if not history_item:
+        abort(404)
+    
+    if not history_item.raw_config:
+        flash("Esta versión no tiene configuración raw guardada", "warning")
+        return redirect(request.referrer or url_for('device.list_devices'))
+    
+    # Get device info for filename
+    device = g.tenant_session.query(Equipo).get(history_item.device_id)
+    hostname = device.hostname if device else "device"
+    date_str = history_item.change_date.strftime('%Y%m%d_%H%M%S')
+    filename = f"{hostname}_{date_str}.config"
+    
+    return Response(
+        history_item.raw_config,
+        mimetype='text/plain',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )

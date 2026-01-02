@@ -1,10 +1,18 @@
 <!DOCTYPE html>
-<html lang="es" data-bs-theme="light">
+<html lang="es">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IS Security Toolset 1.1 beta</title>
+    <title>IS Security Toolset 1.1.1 beta</title>
+
+    <!-- Apply theme IMMEDIATELY to prevent flash -->
+    <script>
+        (function () {
+            var theme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
 
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/is.png') }}">
 
@@ -216,6 +224,129 @@
             color: #ffffff !important;
         }
 
+        /* Dark mode: Cyberpunk colors for duplicate policy rows */
+        [data-bs-theme="dark"] .table-warning,
+        [data-bs-theme="dark"] tr.table-warning {
+            background-color: rgba(255, 0, 128, 0.25) !important;
+            /* Magenta transparent */
+            color: #ff99cc !important;
+        }
+
+        [data-bs-theme="dark"] .table-warning td {
+            background-color: transparent !important;
+            color: #ff99cc !important;
+        }
+
+        [data-bs-theme="dark"] .border-warning {
+            border-color: #ff0080 !important;
+        }
+
+        [data-bs-theme="dark"] .table-info,
+        [data-bs-theme="dark"] tr.table-info {
+            background-color: rgba(0, 255, 255, 0.2) !important;
+            /* Cyan transparent */
+            color: #66ffff !important;
+        }
+
+        [data-bs-theme="dark"] .table-info td {
+            background-color: transparent !important;
+            color: #66ffff !important;
+        }
+
+        [data-bs-theme="dark"] .border-info {
+            border-color: #00ffff !important;
+        }
+
+        /* Dark mode: Darker hover for duplicate rows - high specificity */
+        [data-bs-theme="dark"] .table-hover>tbody>tr.table-warning:hover,
+        [data-bs-theme="dark"] .table-hover>tbody>tr.table-warning:hover>td,
+        [data-bs-theme="dark"] .table-hover tbody tr.table-warning:hover,
+        [data-bs-theme="dark"] .table-hover tbody tr.table-warning:hover td,
+        [data-bs-theme="dark"] table.table-hover tr.table-warning:hover,
+        [data-bs-theme="dark"] table.table-hover tr.table-warning:hover td {
+            --bs-table-hover-bg: rgba(60, 0, 30, 0.9) !important;
+            background-color: rgba(60, 0, 30, 0.9) !important;
+            /* Very dark magenta */
+            color: #ff99cc !important;
+        }
+
+        [data-bs-theme="dark"] .table-hover>tbody>tr.table-info:hover,
+        [data-bs-theme="dark"] .table-hover>tbody>tr.table-info:hover>td,
+        [data-bs-theme="dark"] .table-hover tbody tr.table-info:hover,
+        [data-bs-theme="dark"] .table-hover tbody tr.table-info:hover td,
+        [data-bs-theme="dark"] table.table-hover tr.table-info:hover,
+        [data-bs-theme="dark"] table.table-hover tr.table-info:hover td {
+            --bs-table-hover-bg: rgba(0, 40, 40, 0.9) !important;
+            background-color: rgba(0, 40, 40, 0.9) !important;
+            /* Very dark cyan */
+            color: #66ffff !important;
+        }
+
+        /* Dark mode: Badge fixes for visibility */
+        [data-bs-theme="dark"] .badge.bg-primary {
+            background-color: #0d6efd !important;
+        }
+
+        [data-bs-theme="dark"] .badge.bg-dark {
+            background-color: #495057 !important;
+            color: #fff !important;
+        }
+
+        [data-bs-theme="dark"] .badge.bg-secondary {
+            background-color: #6c757d !important;
+        }
+
+        /* Dark mode: Cyberpunk badges for sites/equipment links */
+        [data-bs-theme="dark"] .badge.bg-info {
+            background-color: rgba(0, 255, 255, 0.3) !important;
+            color: #00ffff !important;
+            border: 1px solid rgba(0, 255, 255, 0.5);
+            text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+        }
+
+        /* Dark mode: Form labels visibility */
+        [data-bs-theme="dark"] label,
+        [data-bs-theme="dark"] .form-label {
+            color: #adb5bd !important;
+        }
+
+        /* Dark mode: Card body text */
+        [data-bs-theme="dark"] .card-body {
+            color: #e1e1e1;
+        }
+
+        /* Dark mode: Placeholder text */
+        [data-bs-theme="dark"] ::placeholder {
+            color: #888 !important;
+            opacity: 1;
+        }
+
+        /* Dark mode: Form inputs with cyberpunk accent */
+        [data-bs-theme="dark"] .form-control,
+        [data-bs-theme="dark"] .form-select {
+            background-color: #1a1d21 !important;
+            border-color: #3d4248 !important;
+            color: #e1e1e1 !important;
+        }
+
+        [data-bs-theme="dark"] .form-control:focus,
+        [data-bs-theme="dark"] .form-select:focus {
+            border-color: #00ffff !important;
+            box-shadow: 0 0 0 0.15rem rgba(0, 255, 255, 0.25) !important;
+        }
+
+        /* Dark mode: Accordion/collapse panels */
+        [data-bs-theme="dark"] .collapse .card-body,
+        [data-bs-theme="dark"] .accordion-collapse .card-body {
+            background-color: #1a1d21 !important;
+        }
+
+        /* Dark mode: Custom report form styling */
+        [data-bs-theme="dark"] .card-header.bg-white {
+            background-color: #2d3238 !important;
+            border-bottom: 1px solid #00ffff33;
+        }
+
         .theme-toggle {
             cursor: pointer;
             padding: 0.5rem;
@@ -234,7 +365,7 @@
         <div class="container">
             <a class="navbar-brand py-0" href="/">
                 <img src="{{ url_for('static', filename='img/issec.png') }}" alt="ISSEC" height="40"> Toolset
-                1.1 beta
+                1.1.1 beta
             </a>
 
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -244,7 +375,19 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 {% if current_user.is_authenticated %}
                 <ul class="navbar-nav ms-auto">
-                    {% if request.blueprint in ['policy', 'device', 'site', 'report', 'history', 'equipo'] %}
+                    {% set is_global_admin = (current_user.username == 'admin' or current_user.get_global_role()) %}
+
+                    {# 1. Global Admin Link (Back to Global Dashboard) #}
+                    {% if is_global_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.index') }}" title="Panel Global">
+                            <i class="bi bi-speedometer2"></i> Panel Global
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {# 2. Device/Policy Tools (Only if Company Selected) #}
+                    {% if session.get('company_id') %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('policy.list_policies') }}">
                             <i class="bi bi-shield-lock"></i> Políticas
@@ -266,13 +409,12 @@
                         </a>
                     </li>
                     {% endif %}
-                    <!-- Company Context -->
+
+                    <!-- Company Context Info -->
                     {% if session.get('company_name') %}
                     <li class="nav-item">
-                        <span class="nav-link text-warning"
-                            title="Empresa: {{ session['company_name'] }} | Rol: {{ session.get('role_name', '?') }}">
+                        <span class="nav-link text-warning fw-bold" title="Empresa: {{ session['company_name'] }}">
                             <i class="bi bi-building"></i> {{ session['company_name'] }}
-                            <span class="badge bg-secondary">{{ session.get('role_name', 'User') }}</span>
                         </span>
                     </li>
                     {% endif %}
@@ -296,14 +438,30 @@
                             {% endif %}
                             {{ current_user.username }}
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}">Mi Perfil</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('auth.select_company') }}">Cambiar Empresa</a>
-                            </li>
+                        <ul class="dropdown-menu dropdown-menu-end shadow">
+                            <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}">
+                                    <i class="bi bi-person me-2"></i>Mi Perfil
+                                </a></li>
+
+                            {% if is_global_admin %}
+                            <li><a class="dropdown-item" href="{{ url_for('main.index') }}">
+                                    <i class="bi bi-speedometer2 me-2"></i>Panel Global
+                                </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('main.admin_settings') }}">
+                                    <i class="bi bi-gear me-2"></i>Ajustes del Sistema
+                                </a></li>
+                            {% endif %}
+
+                            <li><a class="dropdown-item" href="{{ url_for('auth.select_company') }}">
+                                    <i class="bi bi-arrow-repeat me-2"></i>Cambiar Empresa
+                                </a></li>
+
                             <li>
                                 <hr class="dropdown-divider">
                             </li>
-                            <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">Cerrar Sesión</a></li>
+                            <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
+                                    <i class="bi bi-box-arrow-right me-2"></i>Cerrar Sesión
+                                </a></li>
                         </ul>
                     </li>
                 </ul>
@@ -345,14 +503,13 @@
             }
         }
 
-        // Load saved theme on page load
+        // Update icon on page load (theme already applied in head)
         document.addEventListener('DOMContentLoaded', function () {
             const savedTheme = localStorage.getItem('theme') || 'light';
-            const html = document.documentElement;
             const icon = document.getElementById('themeIcon');
-
-            html.setAttribute('data-bs-theme', savedTheme);
-            icon.className = savedTheme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+            if (icon) {
+                icon.className = savedTheme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+            }
         });
     </script>
 </body>

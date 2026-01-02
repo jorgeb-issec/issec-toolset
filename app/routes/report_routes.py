@@ -409,10 +409,16 @@ def generate_pdf():
 
     output_format = request.form.get('format', 'pdf')
 
-    # Build filter_info for no-results message (only for custom reports)
-    filter_info = None
+    # Build filter_info for cover page - now for ALL reports
+    filter_info = {
+        'Tipo de Reporte': title,
+        'Equipo': device.hostname or device.nombre,
+        'VDOMs': ', '.join(vdom_list) if vdom_list else 'Todos',
+    }
+    
+    # Add extra filters for custom reports
     if report_type == 'custom':
-        filter_info = {
+        custom_filters = {
             'Origen Interface': request.form.get('custom_src_intf', '').strip() or None,
             'Origen Address': request.form.get('custom_src_addr', '').strip() or None,
             'Destino Interface': request.form.get('custom_dst_intf', '').strip() or None,
@@ -420,6 +426,7 @@ def generate_pdf():
             'Servicio': request.form.get('custom_svc', '').strip() or None,
             'Acción': request.form.get('custom_action', '').strip() or None,
         }
+        filter_info.update(custom_filters)
 
     if output_format == 'csv':
         csv_gen = CsvReportGenerator(buffer)

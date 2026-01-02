@@ -1,0 +1,269 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4 align-items-center">
+        <div class="col-auto">
+            {% if company.logo %}
+            <img src="{{ url_for('static', filename='uploads/' + company.logo) }}" alt="Logo"
+                class="rounded bg-white p-1 border shadow-sm" style="height: 60px; width: 60px; object-fit: contain;">
+            {% else %}
+            <div class="rounded d-flex align-items-center justify-content-center border shadow-sm"
+                style="width: 60px; height: 60px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <span class="text-white fw-bold h3 mb-0">{{ company.name[0]|upper }}</span>
+            </div>
+            {% endif %}
+        </div>
+        <div class="col">
+            <h2 class="h3 fw-bold mb-0">{{ company.name }}</h2>
+            <div class="d-flex align-items-center gap-3">
+                <span class="badge bg-success">Activa</span>
+                <span class="text-muted small"><i class="bi bi-clock-history me-1"></i>Último acceso: hoy</span>
+                <a href="{{ url_for('auth.select_company') }}" class="btn btn-link btn-sm p-0 text-decoration-none">
+                    <i class="bi bi-arrow-repeat me-1"></i>Cambiar Empresa
+                </a>
+            </div>
+        </div>
+        {% if can_edit %}
+        <div class="col-auto">
+            <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#editCompanyModal">
+                <i class="bi bi-pencil me-1"></i>Editar Empresa
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="row">
+        <!-- Main Content Area -->
+        <div class="col-lg-9">
+            <h5 class="mb-4 border-bottom pb-2 text-uppercase small fw-bold text-muted letter-spacing-1">Mis
+                Herramientas</h5>
+            <div class="row g-4">
+                <!-- Policy Explorer -->
+                {% set policy_active = 'policy_explorer' in company.products %}
+                <div class="col-md-6">
+                    <div
+                        class="card h-100 border-0 shadow-sm transition hover-shadow {{ '' if policy_active else 'opacity-50' }}">
+                        <div class="card-body p-4">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div class="h2 {{ 'text-primary' if policy_active else 'text-secondary' }}">
+                                    <i class="bi bi-shield-check"></i>
+                                </div>
+                                {% if policy_active %}
+                                <span class="badge bg-primary-soft text-primary">Activo</span>
+                                {% else %}
+                                <span class="badge bg-light text-muted">Deshabilitado</span>
+                                {% endif %}
+                            </div>
+                            <h4 class="card-title h5 fw-bold">Policy Explorer</h4>
+                            <p class="card-text text-muted small mb-4">
+                                Auditoría, visualización y análisis de diferencias en políticas de firewall.
+                            </p>
+                            {% if policy_active %}
+                            <a href="{{ url_for('policy.list_policies') }}"
+                                class="btn btn-primary w-100 stretched-link">Ingresar</a>
+                            {% else %}
+                            <button disabled class="btn btn-outline-secondary w-100">Contactar Soporte</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log Analyzer (Coming Soon) -->
+                {% set logs_active = 'log_analyzer' in company.products %}
+                <div class="col-md-6">
+                    <div class="card h-100 border-0 shadow-sm {{ 'opacity-50' if not logs_active else '' }}">
+                        <div class="card-body p-4">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div class="h2 text-secondary">
+                                    <i class="bi bi-file-bar-graph"></i>
+                                </div>
+                                <span class="badge bg-light text-muted">Próximamente</span>
+                            </div>
+                            <h4 class="card-title h5 fw-bold">Log Analyzer</h4>
+                            <p class="card-text text-muted small mb-4">
+                                Análisis de logs y detección de amenazas en tiempo real.
+                            </p>
+                            <button disabled class="btn btn-outline-secondary w-100">Proximamente</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Links / Recent Activity -->
+            <div class="mt-5">
+                <h5 class="mb-4 border-bottom pb-2 text-uppercase small fw-bold text-muted letter-spacing-1">Acceso
+                    Rápido</h5>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <a href="{{ url_for('device.list_devices') }}"
+                            class="card text-decoration-none border-0 shadow-sm h-100 transition hover-light">
+                            <div class="card-body py-3 d-flex align-items-center">
+                                <i class="bi bi-router h4 mb-0 me-3 text-info"></i>
+                                <div>
+                                    <h6 class="mb-0 text-dark">Gestionar Equipos</h6>
+                                    <small class="text-muted">Firewalls y configs</small>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{{ url_for('site.list_sites') }}"
+                            class="card text-decoration-none border-0 shadow-sm h-100 transition hover-light">
+                            <div class="card-body py-3 d-flex align-items-center">
+                                <i class="bi bi-geo-alt h4 mb-0 me-3 text-danger"></i>
+                                <div>
+                                    <h6 class="mb-0 text-dark">Gestionar Sitios</h6>
+                                    <small class="text-muted">Ubicaciones físicas</small>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{{ url_for('report.index') }}"
+                            class="card text-decoration-none border-0 shadow-sm h-100 transition hover-light">
+                            <div class="card-body py-3 d-flex align-items-center">
+                                <i class="bi bi-file-earmark-pdf h4 mb-0 me-3 text-warning"></i>
+                                <div>
+                                    <h6 class="mb-0 text-dark">Reportes PDF</h6>
+                                    <small class="text-muted">Auditorías generadas</small>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right / Info Area -->
+        <div class="col-lg-3 mt-4 mt-lg-0">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="mb-0 fw-bold">Resumen de Empresa</h6>
+                </div>
+                <div class="card-body pt-0">
+                    <div class="mb-3">
+                        <small class="text-muted d-block text-uppercase small fw-bold mb-1">Productos
+                            Habilitados</small>
+                        <div class="d-flex flex-wrap gap-1">
+                            {% for p in company.products %}
+                            <span class="badge bg-info-soft text-info border border-info-soft">{{ p|replace('_', '
+                                ')|title }}</span>
+                            {% else %}
+                            <span class="text-muted small">Sin productos</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted d-block text-uppercase small fw-bold mb-1">Usuarios Asignados</small>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-people me-2"></i>
+                            <span class="text-dark small">8 usuarios activos</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <p class="small text-muted mb-3">¿Necesitas ayuda con la configuración o nuevos módulos?</p>
+                    <a href="https://wa.me/5491123163181" target="_blank" class="btn btn-sm btn-outline-primary w-100">
+                        <i class="bi bi-whatsapp me-1"></i>Contactar Soporte
+                    </a>
+                </div>
+            </div>
+
+            {% if is_admin %}
+            <div class="card border-0 shadow-sm mt-4 bg-dark">
+                <div class="card-body text-center">
+                    <i class="bi bi-speedometer2 h3 text-info mb-2"></i>
+                    <p class="small text-muted mb-2">Acceder al panel de administración global</p>
+                    <a href="{{ url_for('auth.enter_global_admin') }}" class="btn btn-info btn-sm w-100">
+                        <i class="bi bi-arrow-left me-1"></i>Panel Global
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Edit Company (reused from dashboard.html) -->
+{% if can_edit and company %}
+<div class="modal fade" id="editCompanyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('main.edit_company') }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Empresa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-dark">
+                    <div class="text-center mb-3">
+                        {% if company.logo %}
+                        <img src="{{ url_for('static', filename='uploads/' + company.logo) }}" alt="Logo"
+                            class="img-thumbnail" style="max-height: 80px;">
+                        {% endif %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cambiar Logo</label>
+                        <input type="file" name="logo" class="form-control" accept="image/*">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <input type="text" name="name" class="form-control" value="{{ company.name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Productos Habilitados</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="products" value="policy_explorer" {%
+                                if 'policy_explorer' in company.products %}checked{% endif %}>
+                            <label class="form-check-label">Policy Explorer</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="products" value="log_analyzer" {%
+                                if 'log_analyzer' in company.products %}checked{% endif %}>
+                            <label class="form-check-label">Log Analyzer</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<style>
+    .bg-primary-soft {
+        background-color: rgba(13, 110, 253, 0.1);
+    }
+
+    .bg-info-soft {
+        background-color: rgba(13, 202, 240, 0.1);
+    }
+
+    .border-info-soft {
+        border-color: rgba(13, 202, 240, 0.2) !important;
+    }
+
+    .letter-spacing-1 {
+        letter-spacing: 1px;
+    }
+
+    .transition {
+        transition: all 0.2s ease-in-out;
+    }
+
+    .hover-shadow:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, .08) !important;
+    }
+
+    .hover-light:hover {
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}

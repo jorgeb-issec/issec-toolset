@@ -14,51 +14,44 @@ main_bp = Blueprint('main', __name__)
 @main_bp.route('/')
 @login_required
 def index():
-    # Load Company Data (from Core DB)
+    # Load context
     company_id = session.get('company_id')
-    
-    # Check permissions
-    role_name = session.get('role_name', '')
     is_admin = (current_user.username == 'admin')
+    has_global_role = bool(current_user.get_global_role())
     
-    # Check if user has global permissions (even if not 'admin' user)
-    # If they are in index without company_id, they MUST have entered via Global Mode
-    # Use "role_name" session or check DB again?
-    # Let's trust session 'role_name' == 'Global Admin' set by enter_global_admin, OR check DB if needed.
-    # For robustness:
-    has_global_role = False
-    if current_user.get_global_role(): 
-        has_global_role = True
-        
-    can_edit = (role_name == 'Admin' or is_admin or has_global_role) 
-    
-    # Enforce company selection for non-global users
-    if not company_id and not (is_admin or has_global_role):
-         flash('Por favor seleccione una empresa.', 'warning')
-         return redirect(url_for('auth.select_company'))
+    # If no company selected and user has global permissions, show Admin Dashboard
+    if not company_id and (is_admin or has_global_role):
+        all_companies = Company.query.all()
+        return render_template('admin/admin_dashboard.html', 
+                               all_companies=all_companies,
+                               is_admin=True,
+                               title="Panel de Control Global")
 
-    company = None
-    if company_id:
-        company = Company.query.get(company_id)
-    
-    # Check permissions
+    # If no company selected and user is a normal user, redirect to company selection
+    if not company_id:
+        flash('Por favor seleccione una empresa para comenzar.', 'info')
+        return redirect(url_for('auth.select_company'))
+
+    # If company IS selected, show Company Dashboard
+    company = Company.query.get(company_id)
+    if not company:
+        session.pop('company_id', None)
+        flash('La empresa seleccionada ya no existe.', 'danger')
+        return redirect(url_for('auth.select_company'))
+
+    # Permission check for company dashboard
     role_name = session.get('role_name', '')
-    can_edit = (role_name == 'Admin' or current_user.username == 'admin') 
+    can_edit = (role_name == 'Admin' or is_admin or has_global_role)
     
     # Ensure products is list
-    if company and company.products is None:
+    if company.products is None:
         company.products = []
         
-    # GLOBAL ADMIN: If username is 'admin' OR has Global Role, fetch ALL companies
-    all_companies = []
-    if is_admin or has_global_role:
-        all_companies = Company.query.all()
-        
-    return render_template('dashboard.html', 
-                           company=company, # Can be None now
+    return render_template('admin/company_dashboard.html', 
+                           company=company,
                            can_edit=can_edit,
-                           all_companies=all_companies,
-                           is_admin=(is_admin or has_global_role))
+                           is_admin=(is_admin or has_global_role),
+                           title=f"Dashboard - {company.name}")
 
 @main_bp.route('/company/edit', methods=['POST'])
 @login_required
@@ -100,6 +93,27 @@ def edit_company():
         flash("Datos de la empresa actualizados", "success")
         
     return redirect(url_for('main.index'))
+
+@main_bp.route('/admin/settings')
+@login_required
+def admin_settings():
+    # Allow admin user or anyone with global permissions
+    is_admin = (current_user.username == 'admin')
+    has_global_role = bool(current_user.get_global_role())
+    
+    if not (is_admin or has_global_role):
+        flash("Acceso denegado a la configuración global.", "danger")
+        return redirect(url_for('main.index'))
+        
+    all_companies = Company.query.all()
+    all_users = User.query.all()
+    all_roles = Role.query.all()
+    
+    return render_template('admin/settings.html',
+                           all_companies=all_companies,
+                           all_users=all_users,
+                           all_roles=all_roles,
+                           title="Configuración del Sistema")
 
 # --- ADMIN ROUTES ---
 

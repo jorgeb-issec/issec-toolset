@@ -19,12 +19,18 @@ class Equipo(db.Model):
     
     # Store parsed config info (Interfaces, System, etc.)
     config_data = db.Column(JSONB)
+    
+    # Store full raw config file content (for Raw Config tab)
+    raw_config = db.Column(db.Text)
 
     # Relación con Políticas - cascade delete
     politicas = db.relationship('Policy', backref='equipo', lazy=True, cascade="all, delete-orphan")
     
     # Relación con PolicyHistory - cascade delete
     policy_history = db.relationship('PolicyHistory', backref='device', lazy=True, cascade="all, delete-orphan")
+    
+    # Relación con ConfigHistory - cascade delete
+    config_history = db.relationship('ConfigHistory', backref='device', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Equipo {self.nombre}>"

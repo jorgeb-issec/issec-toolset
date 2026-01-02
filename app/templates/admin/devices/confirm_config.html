@@ -1,0 +1,195 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="card shadow-sm">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Confirmar Actualización de Configuración
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <strong>Equipo:</strong> {{ device.nombre }} ({{ device.hostname or device.serial }})
+                {% if new_hostname and new_hostname != device.hostname %}
+                <br><strong>Nuevo Hostname:</strong> {{ new_hostname }}
+                {% endif %}
+            </div>
+
+            <h5 class="mb-3"><i class="bi bi-git me-2"></i>Resumen de Cambios</h5>
+
+            <div class="row">
+                <!-- Interfaces Changes -->
+                <div class="col-md-4">
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <i class="bi bi-ethernet me-1"></i> Interfaces
+                        </div>
+                        <div class="card-body">
+                            {% if delta.interfaces.added %}
+                            <div class="mb-2">
+                                <span class="badge bg-success me-1">+{{ delta.interfaces.added|length }}</span>
+                                <small class="text-success">Nuevas</small>
+                                <ul class="small mt-1 mb-0">
+                                    {% for name in delta.interfaces.added[:5] %}
+                                    <li class="text-success">{{ name }}</li>
+                                    {% endfor %}
+                                    {% if delta.interfaces.added|length > 5 %}
+                                    <li class="text-muted">...y {{ delta.interfaces.added|length - 5 }} más</li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                            {% endif %}
+
+                            {% if delta.interfaces.removed %}
+                            <div class="mb-2">
+                                <span class="badge bg-danger me-1">-{{ delta.interfaces.removed|length }}</span>
+                                <small class="text-danger">Eliminadas</small>
+                                <ul class="small mt-1 mb-0">
+                                    {% for name in delta.interfaces.removed[:5] %}
+                                    <li class="text-danger">{{ name }}</li>
+                                    {% endfor %}
+                                    {% if delta.interfaces.removed|length > 5 %}
+                                    <li class="text-muted">...y {{ delta.interfaces.removed|length - 5 }} más</li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                            {% endif %}
+
+                            {% if delta.interfaces.modified %}
+                            <div class="mb-2">
+                                <span class="badge bg-warning text-dark me-1">~{{ delta.interfaces.modified|length
+                                    }}</span>
+                                <small class="text-warning">Modificadas</small>
+                                <ul class="small mt-1 mb-0">
+                                    {% for name in delta.interfaces.modified[:5] %}
+                                    <li class="text-warning">{{ name }}</li>
+                                    {% endfor %}
+                                    {% if delta.interfaces.modified|length > 5 %}
+                                    <li class="text-muted">...y {{ delta.interfaces.modified|length - 5 }} más</li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                            {% endif %}
+
+                            {% if not delta.interfaces.added and not delta.interfaces.removed and not
+                            delta.interfaces.modified %}
+                            <small class="text-muted">Sin cambios</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VDOMs Changes -->
+                <div class="col-md-4">
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <i class="bi bi-diagram-3 me-1"></i> VDOMs
+                        </div>
+                        <div class="card-body">
+                            {% if delta.vdoms.added %}
+                            <div class="mb-2">
+                                <span class="badge bg-success me-1">+{{ delta.vdoms.added|length }}</span>
+                                <small class="text-success">Nuevos</small>
+                                <ul class="small mt-1 mb-0">
+                                    {% for name in delta.vdoms.added %}
+                                    <li class="text-success">{{ name }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+
+                            {% if delta.vdoms.removed %}
+                            <div class="mb-2">
+                                <span class="badge bg-danger me-1">-{{ delta.vdoms.removed|length }}</span>
+                                <small class="text-danger">Eliminados</small>
+                                <ul class="small mt-1 mb-0">
+                                    {% for name in delta.vdoms.removed %}
+                                    <li class="text-danger">{{ name }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+
+                            {% if not delta.vdoms.added and not delta.vdoms.removed %}
+                            <small class="text-muted">Sin cambios</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- HA Changes -->
+                <div class="col-md-4">
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <i class="bi bi-link-45deg me-1"></i> Alta Disponibilidad (HA)
+                        </div>
+                        <div class="card-body">
+                            {% if delta.ha_changed %}
+                            <div class="alert alert-warning py-2 mb-2">
+                                <i class="bi bi-arrow-left-right me-1"></i> Configuración de HA modificada
+                            </div>
+                            <div class="row small">
+                                <div class="col-6">
+                                    <strong>Antes:</strong><br>
+                                    {% if delta.ha_old %}
+                                    Mode: {{ delta.ha_old.mode or 'N/A' }}<br>
+                                    Enabled: {{ 'Sí' if delta.ha_old.enabled else 'No' }}
+                                    {% else %}
+                                    <em class="text-muted">Sin configurar</em>
+                                    {% endif %}
+                                </div>
+                                <div class="col-6">
+                                    <strong>Después:</strong><br>
+                                    {% if delta.ha_new %}
+                                    Mode: {{ delta.ha_new.mode or 'N/A' }}<br>
+                                    Enabled: {{ 'Sí' if delta.ha_new.enabled else 'No' }}
+                                    {% else %}
+                                    <em class="text-muted">Sin configurar</em>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% else %}
+                            <small class="text-muted">Sin cambios</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Stats -->
+            <div class="alert alert-secondary mt-3">
+                <div class="row text-center">
+                    <div class="col">
+                        <strong>{{ new_config.interfaces|length if new_config.interfaces else 0 }}</strong>
+                        <small class="d-block text-muted">Interfaces Total</small>
+                    </div>
+                    <div class="col">
+                        <strong>{{ new_config.vdoms|length if new_config.vdoms else 0 }}</strong>
+                        <small class="d-block text-muted">VDOMs Total</small>
+                    </div>
+                    <div class="col">
+                        <strong>{{ 'Sí' if new_config.ha.enabled else 'No' }}</strong>
+                        <small class="d-block text-muted">HA Habilitado</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{{ url_for('device.cancel_config_update', device_id=device.id) }}"
+                    class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle me-1"></i> Cancelar
+                </a>
+                <form action="{{ url_for('device.apply_config_update', device_id=device.id) }}" method="POST"
+                    class="d-inline">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle me-1"></i> Aplicar Cambios
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

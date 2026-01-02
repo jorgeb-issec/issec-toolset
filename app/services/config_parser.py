@@ -145,15 +145,31 @@ class ConfigParserService:
                 type_match = re.search(r'set type (\w+)', block_content)
                 alias_match = re.search(r'set alias "([^"]+)"', block_content)
                 role_match = re.search(r'set role (\w+)', block_content)
+                vlanid_match = re.search(r'set vlanid (\d+)', block_content)
+                allowaccess_match = re.search(r'set allowaccess ([^\n]+)', block_content)
+                
+                # Determine interface type with improved detection
+                if type_match:
+                    intf_type = type_match.group(1)
+                elif 'vdom-link' in name:
+                    # vdom-link interfaces should be identified by name
+                    intf_type = 'vdom-link'
+                elif vlanid_match:
+                    # Has vlan_id but no explicit type - it's a VLAN
+                    intf_type = 'vlan'
+                else:
+                    intf_type = 'physical'
                 
                 intf_info = {
                     'name': name,
                     'ip': f"{ip_match.group(1)}/{ip_match.group(2)}" if ip_match else "0.0.0.0/0.0.0.0",
                     'vdom': vdom_match.group(1) if vdom_match else "root",
                     'status': status_match.group(1) if status_match else "up", # Default is up usually
-                    'type': type_match.group(1) if type_match else "physical",
+                    'type': intf_type,
                     'alias': alias_match.group(1) if alias_match else "",
-                    'role': role_match.group(1) if role_match else "undefined"
+                    'role': role_match.group(1) if role_match else "undefined",
+                    'vlan_id': int(vlanid_match.group(1)) if vlanid_match else None,
+                    'allowaccess': allowaccess_match.group(1).strip() if allowaccess_match else ""
                 }
                 data['config_data']['interfaces'].append(intf_info)
 

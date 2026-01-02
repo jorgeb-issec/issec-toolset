@@ -4,8 +4,19 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2"><i class="bi bi-router"></i> {{ device.hostname or device.nombre }}</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
-        <a href="{{ url_for('history.device_history', device_id=device.id) }}" class="btn btn-outline-info me-2"><i
-                class="bi bi-clock-history"></i> Historial</a>
+        <div class="dropdown me-2">
+            <button class="btn btn-outline-info dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="bi bi-clock-history"></i> Historial
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="{{ url_for('history.config_history', device_id=device.id) }}">
+                        <i class="bi bi-file-earmark-code me-2"></i>Historial de Configuración
+                    </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('history.device_history', device_id=device.id) }}">
+                        <i class="bi bi-shield-check me-2"></i>Historial de Políticas
+                    </a></li>
+            </ul>
+        </div>
         <!-- Refresh Config Button -->
         <form action="{{ url_for('device.refresh_device_config', device_id=device.id) }}" method="POST"
             enctype="multipart/form-data" class="d-inline me-2">
@@ -360,6 +371,7 @@
                                 <th>Nombre</th>
                                 <th>Alias</th>
                                 <th>IP Address</th>
+                                <th>Allow Access</th>
                                 <th>Tipo</th>
                                 <th>VDOM</th>
                                 <th>Role</th>
@@ -376,15 +388,19 @@
                                 </td>
                                 <td><small class="text-muted">{{ intf.alias or '-' }}</small></td>
                                 <td><code class="small">{{ intf.ip }}</code></td>
+                                <td><small class="text-muted">{{ intf.allowaccess or '-' }}</small></td>
                                 <td>
                                     {% if intf.type == 'physical' %}
                                     <span class="badge bg-primary">Physical</span>
                                     {% elif intf.type == 'vlan' %}
-                                    <span class="badge bg-info">VLAN</span>
+                                    <span class="badge bg-info">VLAN{% if intf.vlan_id %} {{ intf.vlan_id }}{% endif
+                                        %}</span>
                                     {% elif intf.type == 'tunnel' %}
                                     <span class="badge bg-warning">Tunnel</span>
                                     {% elif intf.type == 'aggregate' %}
                                     <span class="badge bg-secondary">Aggregate</span>
+                                    {% elif intf.type == 'vdom-link' %}
+                                    <span class="badge bg-purple" style="background-color: #6f42c1;">VDOM-Link</span>
                                     {% else %}
                                     <span class="badge bg-light text-dark">{{ intf.type }}</span>
                                     {% endif %}
@@ -402,7 +418,7 @@
                             {% endfor %}
                             {% else %}
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-4">
+                                <td colspan="8" class="text-center text-muted py-4">
                                     <i class="bi bi-inbox" style="font-size: 3rem;"></i>
                                     <p class="mt-2">No hay datos de interfaces importados.</p>
                                 </td>
@@ -478,8 +494,17 @@
     <!-- Raw Config Tab -->
     <div class="tab-pane fade" id="raw" role="tabpanel" aria-labelledby="raw-tab">
         <div class="card shadow-sm border-0">
-            <div class="card-body bg-light">
-                <pre style="max-height: 600px; overflow-y: auto;">{{ device.config_data | tojson(indent=2) }}</pre>
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <span class="fw-bold"><i class="bi bi-code-square me-2"></i>Configuración RAW</span>
+                {% if device.raw_config %}
+                <span class="badge bg-success">Completo</span>
+                {% else %}
+                <span class="badge bg-warning text-dark">Solo JSON Parseado</span>
+                {% endif %}
+            </div>
+            <div class="card-body bg-light p-0">
+                <pre
+                    style="max-height: 600px; overflow-y: auto; margin: 0; padding: 1rem; font-size: 0.75rem;">{% if device.raw_config %}{{ device.raw_config }}{% else %}{{ device.config_data | tojson(indent=2) }}{% endif %}</pre>
             </div>
         </div>
     </div>

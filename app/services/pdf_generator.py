@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
@@ -71,7 +71,7 @@ class PDFReportGenerator:
         """Pie de página minimalista"""
         canvas.saveState()
         page_num = canvas.getPageNumber()
-        text = f"Página {page_num} | Generado por IS Security P.U.N.K.L.I.T.H."
+        text = f"Página {page_num} | Generado por IS Security Toolset"
         
         canvas.setFont('Helvetica', 7)
         canvas.setFillColor(colors.gray)
@@ -104,7 +104,7 @@ class PDFReportGenerator:
             return ""
         return str(value)
 
-    def create_cover_page(self, elements, report_title, device, vdom_list=None):
+    def create_cover_page(self, elements, report_title, device, vdom_list=None, filter_info=None):
         """Portada estilo Material con Doble Logo"""
         # 1. Logos Header Grid (Left: ISSEC, Right: Tenant)
         logo_data = [[None, None]]
@@ -147,7 +147,7 @@ class PDFReportGenerator:
         # Format VDOMs for display
         vdom_display = 'Todos' if not vdom_list else ', '.join(vdom_list)
         
-        data = [
+        device_data = [
             ['FICHA DEL DISPOSITIVO', ''],
             ['Nombre de Equipo', device.nombre],
             ['Ubicación / Sitio', site_name],
@@ -158,30 +158,71 @@ class PDFReportGenerator:
             ['Fecha Reporte', datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
         ]
 
-        t = Table(data, colWidths=[150, 300])
-        t.setStyle(TableStyle([
+        device_table = Table(device_data, colWidths=[120, 200])
+        device_table.setStyle(TableStyle([
             # Cabecera de la ficha
             ('BACKGROUND', (0, 0), (1, 0), PRIMARY_COLOR),
             ('TEXTCOLOR', (0, 0), (1, 0), colors.white),
             ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (1, 0), 8),
-            ('TOPPADDING', (0, 0), (1, 0), 8),
+            ('FONTSIZE', (0, 0), (1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (1, 0), 6),
+            ('TOPPADDING', (0, 0), (1, 0), 6),
             
             # Cuerpo
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
             ('TEXTCOLOR', (0, 1), (-1, -1), TEXT_COLOR),
-            ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'), # Labels en negrita
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
-            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
             
             # Bordes sutiles
             ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ]))
         
-        elements.append(t)
+        # 4. Build Filter Table (if provided)
+        filter_table = None
+        if filter_info:
+            filter_data = [['FILTROS APLICADOS', '']]
+            for key, value in filter_info.items():
+                if value:  # Only show non-empty filters
+                    filter_data.append([key, str(value)])
+            
+            if len(filter_data) > 1:
+                filter_table = Table(filter_data, colWidths=[120, 200])
+                filter_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (1, 0), colors.HexColor('#5A5A5A')),
+                    ('TEXTCOLOR', (0, 0), (1, 0), colors.white),
+                    ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (1, 0), 6),
+                    ('TOPPADDING', (0, 0), (1, 0), 6),
+                    ('BACKGROUND', (0, 1), (-1, -1), LIGHT_GRAY),
+                    ('TEXTCOLOR', (0, 1), (-1, -1), TEXT_COLOR),
+                    ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+                    ('TOPPADDING', (0, 1), (-1, -1), 4),
+                    ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ]))
+        
+        # 5. Create two-column layout with both tables side by side
+        if filter_table:
+            # Wrap tables in a container table for side-by-side layout
+            container = Table([[device_table, filter_table]], colWidths=[340, 340])
+            container.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 5),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+            ]))
+            elements.append(container)
+        else:
+            elements.append(device_table)
+        
         elements.append(PageBreak())
 
     def create_policy_table(self, policies):
@@ -300,8 +341,8 @@ class PDFReportGenerator:
         )
         elements = []
 
-        # 1. Portada
-        self.create_cover_page(elements, title, device, vdom_list)
+        # 1. Portada (now includes filter info)
+        self.create_cover_page(elements, title, device, vdom_list, filter_info)
 
         # 2. Título de sección de datos
         elements.append(Paragraph(f"Detalle de Políticas ({len(policies)} registros)", self.styles['Heading2']))
