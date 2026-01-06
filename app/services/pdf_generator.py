@@ -540,4 +540,116 @@ class PDFReportGenerator:
             
             elements.append(Spacer(1, 15))
         
+        
+        doc.build(elements, onFirstPage=self._header_footer, onLaterPages=self._header_footer)
+
+    def generate_recommendations(self, device, recommendations, title, filter_info=None):
+        """Generate Detailed Recommendation Report"""
+        doc = SimpleDocTemplate(
+            self.buffer, 
+            pagesize=landscape(A4), 
+            rightMargin=15, leftMargin=15, 
+            topMargin=30, bottomMargin=30
+        )
+        elements = []
+
+        # 1. Cover Page
+        vdoms = set(r.related_vdom for r in recommendations if r.related_vdom)
+        self.create_cover_page(elements, title, device, list(vdoms), filter_info)
+
+        # 2. Intro
+        elements.append(Paragraph(f"Resumen de Hallazgos ({len(recommendations)})", self.styles['Heading2']))
+        elements.append(Spacer(1, 10))
+
+        # 3. Summary Table
+        summary_data = [['Policy ID', 'Severidad', 'VDOM', 'Título']]
+        for r in recommendations:
+            pol_id = str(r.related_policy_id) if r.related_policy_id is not None else 'N/A'
+            summary_data.append([
+                pol_id,
+                r.severity.upper(),
+                r.related_vdom or '-',
+                r.title
+            ])
+        
+        # Calculate widths
+        # A4 Landscape ~800pts
+        sum_table = Table(summary_data, colWidths=[80, 80, 100, 500])
+        sum_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), PRIMARY_COLOR),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, LIGHT_GRAY]),
+        ]))
+        elements.append(sum_table)
+        elements.append(PageBreak())
+
+        # 4. Detailed Findings
+        elements.append(Paragraph("Detalle de Recomendaciones", self.styles['MaterialTitle']))
+        elements.append(Spacer(1, 10))
+
+        for i, r in enumerate(recommendations, 1):
+            # Card Header
+            header_color = colors.orange
+            if r.severity == 'critical': header_color = colors.red
+            elif r.severity == 'high': header_color = colors.orangered
+            elif r.severity == 'low': header_color = colors.green
+            
+            # Use KeepTogether to avoid breaking a finding across pages if possible, 
+            # but usually findings are long so we might not want to enforce it too strictly for long CLI.
+            # We'll stick to sequential flow.
+            
+            elements.append(Paragraph(f"#{i} - {r.title}", self.styles['Heading3']))
+            
+            # Metadata Grid
+            pol_id = str(r.related_policy_id) if r.related_policy_id is not None else 'N/A'
+            meta_data = [
+                [f"Política Relacionada: {pol_id}", f"Severidad: {r.severity.upper()}"],
+                [f"VDOM: {r.related_vdom or '-'}", f"Fecha: {r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '-'}"],
+            ]
+            meta_table = Table(meta_data, colWidths=[300, 300])
+            meta_table.setStyle(TableStyle([
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.gray),
+                ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ('LINEBELOW', (0, -1), (-1, -1), 0.5, LIGHT_GRAY),
+            ]))
+            elements.append(meta_table)
+            elements.append(Spacer(1, 10))
+
+            # Content
+            elements.append(Paragraph("<b>Descripción del Riesgo:</b>", self.styles['Normal']))
+            elements.append(Paragraph(r.description or 'Sin descripción', self.styles['Normal']))
+            elements.append(Spacer(1, 5))
+
+            elements.append(Paragraph("<b>Acción Recomendada:</b>", self.styles['Normal']))
+            elements.append(Paragraph(r.recommendation or '-', self.styles['Normal']))
+            elements.append(Spacer(1, 5))
+            
+            # CLI Remediation
+            evidence = r.evidence or {}
+            cli = evidence.get('cli_remediation')
+            if cli:
+                elements.append(Paragraph("<b>CLI Remediation Script:</b>", self.styles['Normal']))
+                # Use a monospaced style
+                code_style = ParagraphStyle(
+                    'Code',
+                    parent=self.styles['Normal'],
+                    fontName='Courier',
+                    fontSize=8,
+                    textColor=colors.white,
+                    backColor=colors.HexColor('#2d2d2d'),
+                    borderPadding=10,
+                    leading=10
+                )
+                # Handle newlines in Paragraph by replacing \n with <br/>?
+                # Actually Preformatted is better, but Paragraph with <br/> works.
+                formatted_cli = cli.replace('\n', '<br/>')
+                elements.append(Paragraph(formatted_cli, code_style))
+            
+            elements.append(Spacer(1, 20))
+            elements.append(Paragraph("_" * 100, self.styles['Normal'])) # Separator
+            elements.append(Spacer(1, 20))
+
         doc.build(elements, onFirstPage=self._header_footer, onLaterPages=self._header_footer)

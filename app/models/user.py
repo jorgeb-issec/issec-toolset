@@ -59,6 +59,26 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    def encode_auth_token(self, secret_key):
+        """
+        Generates the Auth Token
+        """
+        import jwt
+        import datetime
+        try:
+            payload = {
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1),
+                'iat': datetime.datetime.utcnow(),
+                'user_id': str(self.id)
+            }
+            return jwt.encode(
+                payload,
+                secret_key,
+                algorithm='HS256'
+            )
+        except Exception as e:
+            return e
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(uuid.UUID(user_id))

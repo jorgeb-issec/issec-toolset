@@ -1,0 +1,1229 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">Log Analyzer</h1>
+            <p class="text-muted small">Análisis de seguridad y detección de amenazas con AI</p>
+        </div>
+        <div class="d-flex gap-2">
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="actionsDropdown"
+                    data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-gear"></i> Acciones
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="actionsDropdown">
+                    <li><button class="dropdown-item text-danger" onclick="confirmDeleteLogs()">
+                            <i class="bi bi-trash me-2"></i>Eliminar Todos los Logs
+                        </button></li>
+                    <li><button class="dropdown-item text-warning" onclick="confirmDeleteRecommendations()">
+                            <i class="bi bi-eraser me-2"></i>Eliminar Recomendaciones
+                        </button></li>
+                </ul>
+            </div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#importLogsModal">
+                <i class="bi bi-upload"></i> Importar Logs
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4" id="stats-container">
+        <div class="col-md-3">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Total Logs</h6>
+                    <h2 class="mb-0" id="stat-total-logs">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100 border-0 shadow-sm border-start border-danger border-4">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Amenazas/Denied</h6>
+                    <h2 class="mb-0 text-danger" id="stat-threats">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100 border-0 shadow-sm border-start border-success border-4">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Aceptados</h6>
+                    <h2 class="mb-0 text-success" id="stat-accepted">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100 border-0 shadow-sm border-start border-warning border-4">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small">Recomendaciones AI</h6>
+                    <h2 class="mb-0 text-warning" id="stat-recommendations">-</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions Breakdown -->
+    <div class="card mb-3 border-0 shadow-sm">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <small class="text-uppercase text-muted fw-bold">Detalle de Acciones (Total)</small>
+                <small class="text-muted" style="font-size: 0.7em;">Todos los eventos registrados</small>
+            </div>
+            <div class="d-flex flex-wrap gap-2" id="actions-breakdown">
+                <span class="text-muted small">Cargando detalles...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Tabs -->
+    <ul class="nav nav-tabs mb-3" id="logTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="explorer-tab" data-bs-toggle="tab" data-bs-target="#explorer"
+                type="button">Explorer</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis" type="button">
+                AI Analysis <span class="badge bg-primary ms-1">New</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="config-tab" data-bs-toggle="tab" data-bs-target="#config" type="button">
+                <i class="bi bi-gear"></i> Configuración
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="logTabsContent">
+        <!-- Explorer Tab -->
+        <div class="tab-pane fade show active" id="explorer" role="tabpanel">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <form id="filter-form" class="row g-3 align-items-center">
+                        <div class="col-auto">
+                            <select class="form-select form-select-sm" name="device_id">
+                                <option value="">Todos los Equipos</option>
+                                {% for d in devices %}
+                                <option value="{{ d.id }}">{{ d.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <input type="text" class="form-control form-control-sm" name="search"
+                                placeholder="Buscar IP, usuario...">
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer bg-white d-flex justify-content-between align-items-center border-bottom">
+                    <div class="d-flex align-items-center">
+                        <span class="text-muted small me-2" id="pagination-info-top">Mostrando 0-0 de 0</span>
+                        <select class="form-select form-select-sm per-page-select" style="width: 80px;"
+                            onchange="changePerPage(this.value)">
+                            <option value="8">8</option>
+                            <option value="16">16</option>
+                            <option value="32" selected>32</option>
+                            <option value="64">64</option>
+                            <option value="128">128</option>
+                            <option value="256">256</option>
+                            <option value="512">512</option>
+                        </select>
+                        <span class="text-muted small ms-2">filas</span>
+                    </div>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0" id="pagination-controls-top">
+                        </ul>
+                    </nav>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped mb-0 text-nowrap align-middle">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Level</th>
+                                    <th>VDOM</th>
+                                    <th>Type</th>
+                                    <th>Src IP</th>
+                                    <th>Dst IP</th>
+                                    <th>Service</th>
+                                    <th>Action</th>
+                                    <th>App</th>
+                                    <th><i class="bi bi-gear"></i></th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-table-body">
+                                <tr>
+                                    <td colspan="10" class="text-center py-4 text-muted">Cargando datos...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <span class="text-muted small me-2" id="pagination-info-bottom">Mostrando 0-0 de 0</span>
+                        <select class="form-select form-select-sm per-page-select" style="width: 80px;"
+                            onchange="changePerPage(this.value)">
+                            <option value="8">8</option>
+                            <option value="16">16</option>
+                            <option value="32" selected>32</option>
+                            <option value="64">64</option>
+                            <option value="128">128</option>
+                            <option value="256">256</option>
+                            <option value="512">512</option>
+                        </select>
+                        <span class="text-muted small ms-2">filas</span>
+                    </div>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0" id="pagination-controls-bottom">
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Tab -->
+        <div class="tab-pane fade" id="analysis" role="tabpanel">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-white">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h5 class="mb-0"><i class="bi bi-stars text-warning me-2"></i>Recomendaciones de
+                                    Seguridad (AI)</h5>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                                        <i class="bi bi-download"></i> Exportar
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="#"
+                                                onclick="exportRecommendations('all', 'csv')"><i
+                                                    class="bi bi-file-earmark-spreadsheet me-2"></i>Todo (CSV)</a></li>
+                                        <li><a class="dropdown-item" href="#"
+                                                onclick="exportRecommendations('selected', 'csv')"><i
+                                                    class="bi bi-file-earmark-spreadsheet me-2"></i>Selección (CSV)</a>
+                                        </li>
+                                        <li>
+                                            <hr class="dropdown-divider">
+                                        </li>
+                                        <li><a class="dropdown-item" href="#"
+                                                onclick="exportRecommendations('all', 'pdf')"><i
+                                                    class="bi bi-file-earmark-pdf me-2"></i>Todo (PDF)</a></li>
+                                        <li><a class="dropdown-item" href="#"
+                                                onclick="exportRecommendations('selected', 'pdf')"><i
+                                                    class="bi bi-file-earmark-pdf me-2"></i>Selección (PDF)</a></li>
+                                    </ul>
+                                    <button class="btn btn-outline-primary" onclick="loadRecommendations()">
+                                        <i class="bi bi-arrow-clockwise"></i> Actualizar
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center border-top pt-2">
+                                <div class="d-flex align-items-center">
+                                    <select class="form-select form-select-sm rec-per-page-select" style="width: 70px;"
+                                        onchange="changeRecPerPage(this.value)">
+                                        <option value="8">8</option>
+                                        <option value="16">16</option>
+                                        <option value="32">32</option>
+                                        <option value="64">64</option>
+                                        <option value="128">128</option>
+                                        <option value="256">256</option>
+                                        <option value="512">512</option>
+                                    </select>
+                                    <span class="ms-2 small text-muted">items</span>
+                                </div>
+                                <nav>
+                                    <ul class="pagination pagination-sm mb-0 rec-pagination-controls"></ul>
+                                </nav>
+                            </div>
+                        </div>
+                        <div class="card-body" id="recommendations-container">
+                            <div class="text-center py-5 text-muted">
+                                <div class="spinner-border text-primary mb-3" role="status"></div>
+                                <p>Analizando patrones de seguridad...</p>
+                            </div>
+                        </div>
+                        <div
+                            class="card-footer bg-white border-top-0 d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                <select class="form-select form-select-sm rec-per-page-select" style="width: 70px;"
+                                    onchange="changeRecPerPage(this.value)">
+                                    <option value="8" selected>8</option>
+                                    <option value="16">16</option>
+                                    <option value="32">32</option>
+                                    <option value="64">64</option>
+                                    <option value="128">128</option>
+                                    <option value="256">256</option>
+                                    <option value="512">512</option>
+                                </select>
+                                <span class="ms-2 small text-muted">items</span>
+                            </div>
+                            <nav>
+                                <ul class="pagination pagination-sm mb-0 rec-pagination-controls"></ul>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card shadow-sm mb-3">
+                        <div class="card-header bg-white">
+                            <h6 class="mb-0"><i class="bi bi-sliders me-2"></i>Parámetros de Análisis AI</h6>
+                        </div>
+                        <div class="card-body">
+                            <form id="ai-params-form">
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Enfoques de Análisis</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="ai-denied" checked>
+                                        <label class="form-check-label small" for="ai-denied">
+                                            Conexiones denegadas/bloqueadas
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="ai-high-volume" checked>
+                                        <label class="form-check-label small" for="ai-high-volume">
+                                            Sesiones de alto volumen
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="ai-geo" checked>
+                                        <label class="form-check-label small" for="ai-geo">
+                                            Análisis por geolocalización
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="ai-policy-opt">
+                                        <label class="form-check-label small" for="ai-policy-opt">
+                                            Optimización de políticas
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="ai-new-policies">
+                                        <label class="form-check-label small" for="ai-new-policies">
+                                            Sugerir nuevas políticas
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Umbral de alertas</label>
+                                    <select class="form-select form-select-sm" id="ai-threshold">
+                                        <option value="low">Bajo (más alertas)</option>
+                                        <option value="medium" selected>Medio</option>
+                                        <option value="high">Alto (solo críticas)</option>
+                                    </select>
+                                </div>
+                                <button type="button" class="btn btn-primary btn-sm w-100" onclick="runAIAnalysis()">
+                                    <i class="bi bi-play-fill me-1"></i>Ejecutar Análisis AI
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Config Tab -->
+        <div class="tab-pane fade" id="config" role="tabpanel">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-white">
+                            <h5 class="mb-0"><i class="bi bi-key me-2"></i>Configuración de AI (Gemini)</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info small">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Para usar el análisis de seguridad con IA, necesitas una API Key de Google Gemini.
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="alert-link">
+                                    Obtener API Key <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                            </div>
+
+                            <form id="gemini-config-form">
+                                <div class="mb-3">
+                                    <label class="form-label">Gemini API Key</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-key"></i></span>
+                                        <input type="password" class="form-control" name="gemini_api_key"
+                                            id="gemini-api-key" placeholder="AIzaSy...">
+                                        <button type="button" class="btn btn-outline-secondary"
+                                            onclick="toggleApiKeyVisibility()">
+                                            <i class="bi bi-eye" id="eye-icon"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">
+                                        La API Key se guardará de forma segura en la configuración de tu empresa.
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary" id="btn-save-config">
+                                    <i class="bi bi-check-lg me-1"></i>Guardar Configuración
+                                </button>
+                            </form>
+
+                            <hr class="my-4">
+
+                            <h6 class="mb-3">Estado de Configuración</h6>
+                            <div id="config-status">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="badge bg-secondary me-2" id="api-key-status">Verificando...</span>
+                                    <span class="small text-muted">API Key de Gemini</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-white">
+                            <h5 class="mb-0"><i class="bi bi-question-circle me-2"></i>Ayuda</h5>
+                        </div>
+                        <div class="card-body">
+                            <h6>¿Cómo funciona el análisis AI?</h6>
+                            <p class="small text-muted">
+                                Cuando importas logs, el sistema puede enviar estadísticas y patrones a la IA de Google
+                                (Gemini) para generar recomendaciones de seguridad personalizadas.
+                            </p>
+
+                            <h6>¿Qué datos se envían?</h6>
+                            <p class="small text-muted">
+                                Solo se envían estadísticas agregadas y muestras de conexiones denegadas.
+                                No se envían direcciones IP internas ni datos sensibles.
+                            </p>
+
+                            <h6>Alternativa: Variable de Entorno</h6>
+                            <p class="small text-muted">
+                                También puedes configurar la variable <code>GEMINI_API_KEY</code> en el servidor
+                                para aplicar a todas las empresas.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal fade" id="importLogsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="import-form" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">Importar Logs</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Archivo de Logs (CSV)</label>
+                        <input type="file" name="file" class="form-control" required accept=".log,.csv,.txt">
+                        <div class="form-text">
+                            Formato FortiAnalyzer CSV. El equipo se detecta automáticamente del serial (devid) en los
+                            logs.
+                        </div>
+                    </div>
+                    <div class="alert alert-info small mb-3">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Auto-detección:</strong> El sistema buscará el serial del dispositivo dentro del archivo
+                        de logs y lo asociará con el equipo correspondiente en tu inventario.
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="analyze_ai" id="analyzeAiCheck" checked>
+                        <label class="form-check-label" for="analyzeAiCheck">
+                            Ejecutar análisis de Seguridad AI
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btn-import-submit">
+                        <span class="spinner-border spinner-border-sm d-none me-2" role="status"
+                            aria-hidden="true"></span>
+                        Importar y Analizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Policy Analysis Modal -->
+<div class="modal fade" id="policyAnalysisModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Análisis Detallado de Política</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="policyAnalysisContent">
+                <!-- Loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <a href="{{ url_for('policy.list_policies') }}" class="btn btn-primary" target="_blank"
+                    id="btn-go-to-policy">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Ir a Policy Explorer
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Log Details Modal -->
+<div class="modal fade" id="logDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">Detalles Log API</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body bg-dark text-light p-0">
+                <pre class="m-0 p-3" id="logDetailsContent"
+                    style="white-space: pre-wrap; font-size: 0.85rem; font-family: monospace;"></pre>
+            </div>
+            <div class="modal-footer bg-dark border-top-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = '/api/v1';
+    const API_TOKEN = '{{ api_token }}'; // Injected by Backend
+    let currentPage = 1;
+    let currentPerPage = 32;
+
+    // Helper for API Calls
+    async function apiCall(endpoint, method = 'GET', body = null) {
+        const headers = {
+            'Authorization': `Bearer ${API_TOKEN}`
+        };
+        // Do not set Content-Type if Body is FormData (it sets it automatically with boundary)
+        if (body && !(body instanceof FormData)) {
+            headers['Content-Type'] = 'application/json';
+        }
+
+        const config = { method, headers };
+        if (body) config.body = body;
+
+        const response = await fetch(`${API_BASE}${endpoint}`, config);
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Error desconocido');
+        }
+        return data;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadLogs();
+        loadStats();  // Load statistics for cards
+        loadRecommendations();
+        // loadImportHistory(); // TODO: Implement import history
+
+        document.getElementById('filter-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            currentPage = 1;
+            loadLogs();
+        });
+
+        document.getElementById('import-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btn-import-submit');
+            const spinner = btn.querySelector('.spinner-border');
+
+            btn.disabled = true;
+            spinner.classList.remove('d-none');
+
+            const formData = new FormData(e.target);
+
+            try {
+                const result = await apiCall('/logs/import', 'POST', formData);
+                alert('Logs importados correctamente. Sesión: ' + result.import_session_id + '\\nLogs: ' + result.log_count);
+                location.reload();
+            } catch (error) {
+                console.error(error);
+                alert('Error al importar: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                spinner.classList.add('d-none');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('importLogsModal'));
+                modal.hide();
+            }
+        });
+    });
+
+    async function loadLogs() {
+        const tbody = document.getElementById('logs-table-body');
+
+        try {
+            // Get Filters
+            const formData = new FormData(document.getElementById('filter-form'));
+            const search = formData.get('search') || '';
+            const deviceId = formData.get('device_id') || '';
+
+            const url = `/logs?page=${currentPage}&per_page=${currentPerPage}&q=${encodeURIComponent(search)}&device_id=${deviceId}`;
+            const data = await apiCall(url);
+
+            tbody.innerHTML = '';
+
+            if (data.data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No se encontraron logs</td></tr>';
+                return;
+            }
+
+            data.data.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="small">${log.timestamp ? new Date(log.timestamp).toLocaleString() : '-'}</td>
+                    <td><span class="badge bg-${getLevelBadge(log.level)}">${log.level || 'N/A'}</span></td>
+                    <td class="small">${log.vdom || 'root'}</td>
+                    <td class="small">${log.log_type || '-'}</td>
+                    <td>${log.src_ip || '-'}</td>
+                    <td>${log.dst_ip || '-'}</td>
+                    <td>${log.service || '-'}</td>
+                    <td><span class="badge bg-${log.action === 'accept' ? 'success' : (log.action === 'deny' ? 'danger' : 'secondary')}">${log.action || '-'}</span></td>
+                    <td class="small">${log.app || '-'}</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-info border-0" onclick="viewLogDetails('${log.id}')" title="Ver Detalles Raw">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            updatePagination(data.pagination);
+
+            // Check Stats (Optional update)
+            // document.getElementById('stat-total-logs').innerText = data.meta.total;
+
+        } catch (error) {
+            tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger">Error: ${error.message}</td></tr>`;
+        }
+    }
+
+    function getLevelBadge(level) {
+        if (!level) return 'secondary';
+        level = level.toLowerCase();
+        if (level === 'critical' || level === 'alert') return 'danger';
+        if (level === 'error') return 'warning text-dark';
+        if (level === 'warning') return 'warning text-dark';
+        if (level === 'notice') return 'info text-dark';
+        return 'secondary';
+    }
+
+    function changePerPage(val) {
+        currentPerPage = parseInt(val);
+        document.querySelectorAll('.per-page-select').forEach(el => el.value = val);
+        currentPage = 1;
+        loadLogs();
+    }
+
+    async function viewLogDetails(logId) {
+        const modal = new bootstrap.Modal(document.getElementById('logDetailsModal'));
+        const content = document.getElementById('logDetailsContent');
+        content.innerHTML = '<div class="text-center p-3"><div class="spinner-border text-light"></div></div>';
+        modal.show();
+
+        try {
+            const data = await apiCall(`/logs/${logId}`);
+            if (data.success) {
+                const raw = data.data.raw_data || data.data;
+                content.textContent = JSON.stringify(raw, null, 2);
+            } else {
+                content.innerText = 'No details found.';
+            }
+        } catch (e) {
+            content.innerText = 'Error: ' + e.message;
+        }
+    }
+
+    function updatePagination(pagination) {
+        if (!pagination) return;
+
+        ['top', 'bottom'].forEach(pos => {
+            const container = document.getElementById(`pagination-controls-${pos}`);
+            const info = document.getElementById(`pagination-info-${pos}`);
+            if (!container || !info) return;
+
+            const startItem = ((pagination.page - 1) * pagination.per_page) + 1;
+            const endItem = Math.min(pagination.page * pagination.per_page, pagination.total);
+            info.innerText = `Mostrando ${pagination.total > 0 ? startItem : 0}-${endItem} de ${pagination.total}`;
+
+            container.innerHTML = '';
+
+            const hasPrev = pagination.page > 1;
+            const hasNext = pagination.page < pagination.pages;
+
+            // Prev
+            const prevLi = document.createElement('li');
+            prevLi.className = `page-item ${!hasPrev ? 'disabled' : ''}`;
+            prevLi.innerHTML = `<button class="page-link">Anterior</button>`;
+            prevLi.onclick = () => { if (hasPrev) { currentPage--; loadLogs(); } };
+            container.appendChild(prevLi);
+
+            // Next
+            const nextLi = document.createElement('li');
+            nextLi.className = `page-item ${!hasNext ? 'disabled' : ''}`;
+            nextLi.innerHTML = `<button class="page-link">Siguiente</button>`;
+            nextLi.onclick = () => { if (hasNext) { currentPage++; loadLogs(); } };
+            container.appendChild(nextLi);
+        });
+    }
+
+    async function loadStats() {
+        try {
+            const data = await apiCall('/logs/stats');
+            if (data.success && data.data) {
+                const stats = data.data;
+
+                // Total logs
+                document.getElementById('stat-total-logs').textContent =
+                    stats.total_logs?.toLocaleString() || '0';
+
+                // Threats (deny, block, dropped actions)
+                const threats = (stats.by_action?.deny || 0) +
+                    (stats.by_action?.blocked || 0) +
+                    (stats.by_action?.dropped || 0);
+                document.getElementById('stat-threats').textContent =
+                    threats.toLocaleString();
+
+                // Accepted
+                const accepted = stats.by_action?.accept || 0;
+                document.getElementById('stat-accepted').textContent =
+                    accepted.toLocaleString();
+
+                // Populate Breakdown
+                const breakdownContainer = document.getElementById('actions-breakdown');
+                if (breakdownContainer && stats.by_action) {
+                    breakdownContainer.innerHTML = '';
+                    // Sort by count desc
+                    const entries = Object.entries(stats.by_action).sort((a, b) => b[1] - a[1]);
+
+                    entries.forEach(([action, count]) => {
+                        let color = 'secondary';
+                        if (['accept'].includes(action)) color = 'success';
+                        else if (['deny', 'blocked', 'dropped'].includes(action)) color = 'danger';
+                        else if (['close', 'timeout'].includes(action)) color = 'dark';
+                        else if (['client-rst', 'server-rst'].includes(action)) color = 'warning text-dark';
+
+                        const el = document.createElement('div');
+                        el.className = `badge bg-light text-dark border d-flex align-items-center px-2 py-1`;
+                        el.innerHTML = `
+                            <span class="badge bg-${color} rounded-circle me-2 p-1" style="width:8px; height:8px;"></span>
+                            <span class="text-capitalize me-2">${action}</span>
+                            <strong>${count.toLocaleString()}</strong>
+                        `;
+                        breakdownContainer.appendChild(el);
+                    });
+                }
+            }
+
+            // Also load recommendation count
+            try {
+                const recData = await apiCall('/logs/recommendations?per_page=1');
+                if (recData.success && recData.pagination) {
+                    document.getElementById('stat-recommendations').textContent =
+                        (recData.pagination.total || 0).toLocaleString();
+                } else if (recData.success && recData.data) {
+                    document.getElementById('stat-recommendations').textContent =
+                        recData.data.length.toString();
+                }
+            } catch (e) {
+                document.getElementById('stat-recommendations').textContent = '0';
+            }
+        } catch (error) {
+            console.error('Error loading stats:', error);
+        }
+    }
+
+    async function runAIAnalysis() {
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Analizando...';
+
+        // Collect AI parameters
+        const params = {
+            analyze_denied: document.getElementById('ai-denied').checked,
+            analyze_high_volume: document.getElementById('ai-high-volume').checked,
+            analyze_geo: document.getElementById('ai-geo').checked,
+            optimize_policies: document.getElementById('ai-policy-opt').checked,
+            suggest_new_policies: document.getElementById('ai-new-policies').checked,
+            threshold: document.getElementById('ai-threshold').value
+        };
+
+        try {
+            const result = await apiCall('/logs/analyze', 'POST', JSON.stringify(params));
+            alert('Análisis completado. Se generaron ' + (result.recommendations_count || 0) + ' recomendaciones.');
+            loadRecommendations();
+            loadStats();
+        } catch (error) {
+            alert('Error en análisis AI: ' + error.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    let recPage = 1;
+    let recPerPage = 8;
+
+    function changeRecPerPage(val) {
+        recPerPage = parseInt(val);
+        document.querySelectorAll('.rec-per-page-select').forEach(el => el.value = val);
+        recPage = 1;
+        loadRecommendations();
+    }
+
+    async function exportRecommendations(mode, format = 'csv') {
+        let selectedIds = [];
+        if (mode === 'selected') {
+            const chks = document.querySelectorAll('.rec-chk:checked');
+            if (chks.length === 0) {
+                alert('Por favor selecciona al menos una recomendación para exportar.');
+                return;
+            }
+            selectedIds = Array.from(chks).map(cb => cb.value);
+        }
+
+        // Find the clicking element safely
+        if (event && event.target) {
+            // Optional: visual feedback
+        }
+
+        try {
+            const deviceId = document.querySelector('select[name="device_id"]').value;
+
+            const payload = {
+                ids: selectedIds,
+                format: format,
+                filters: {
+                    all: mode === 'all',
+                    device_id: deviceId
+                }
+            };
+
+            const response = await fetch(`${API_BASE}/logs/recommendations/export`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${API_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error('Export failed');
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `recommendations_${mode}_${new Date().toISOString().slice(0, 10)}.${format}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } catch (error) {
+            alert('Error exportando: ' + error.message);
+        }
+    }
+
+    async function loadRecommendations() {
+        const container = document.getElementById('recommendations-container');
+        try {
+            // Get Filters
+            const deviceId = document.querySelector('select[name="device_id"]').value;
+            let url = `/logs/recommendations?page=${recPage}&per_page=${recPerPage}`;
+            if (deviceId) url += `&device_id=${deviceId}`;
+
+            const data = await apiCall(url);
+            container.innerHTML = '';
+
+            if (!data.data || data.data.length === 0) {
+                container.innerHTML = '<div class="text-center py-5 text-muted"><p>No hay recomendaciones de seguridad aún.</p></div>';
+                updateRecPagination(null);
+                return;
+            }
+
+            data.data.forEach(rec => {
+                const div = document.createElement('div');
+                div.className = 'alert alert-light border-start border-warning border-4 shadow-sm mb-3';
+                div.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="d-flex align-items-center">
+                            <div class="form-check me-2">
+                                <input class="form-check-input rec-chk" type="checkbox" value="${rec.id}">
+                            </div>
+                            <h6 class="alert-heading fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Detectado: ${rec.title || 'Anomalía Detectada'}</h6>
+                        </div>
+                        <span class="badge bg-${rec.severity === 'high' || rec.severity === 'critical' ? 'danger' : 'warning'} text-uppercase">${rec.severity}</span>
+                    </div>
+                    <p class="mb-2 text-muted small">${rec.created_at ? new Date(rec.created_at).toLocaleString() : ''}</p>
+                    <p class="mb-2">${rec.description || ''}</p>
+                    ${rec.affected_count ? `<p class="small mb-2"><strong>${rec.affected_count}</strong> conexiones afectadas</p>` : ''}
+                    
+                    ${(rec.related_policy_id || rec.related_policy_id === 0 || rec.related_policy_id === '0') ? `
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <p class="small mb-0"><i class="bi bi-shield me-1"></i>Política relacionada: <code>${rec.related_policy_id}</code></p>
+                            <button class="btn btn-sm btn-outline-dark" onclick="viewPolicyAnalysis('${rec.related_policy_id}', '${rec.device_id}', this)" data-rec='${JSON.stringify(rec).replace(/'/g, "&#39;")}'>
+                                <i class="bi bi-search me-1"></i>Ver Análisis
+                            </button>
+                        </div>
+                    ` : ''}
+                    
+                    <hr class="my-2">
+                    <div class="small"><strong>Acción Sugerida:</strong> ${rec.recommendation || 'Revisar configuración de seguridad'}</div>
+                `;
+                container.appendChild(div);
+            });
+
+            updateRecPagination(data.pagination);
+
+        } catch (error) {
+            container.innerHTML = `<div class="alert alert-danger">Error cargando recomendaciones: ${error.message}</div>`;
+        }
+    }
+
+    function updateRecPagination(pagination) {
+        const uls = document.querySelectorAll('.rec-pagination-controls');
+        uls.forEach(ul => {
+            ul.innerHTML = '';
+            if (!pagination || pagination.pages <= 1) return;
+
+            // Previous
+            ul.innerHTML += `
+                <li class="page-item ${pagination.page === 1 ? 'disabled' : ''}">
+                    <button class="page-link" onclick="recPage--; loadRecommendations()">Anterior</button>
+                </li>
+            `;
+
+            // Simple Page info (Page X of Y)
+            const start = ((pagination.page - 1) * pagination.per_page) + 1;
+            const end = Math.min(pagination.page * pagination.per_page, pagination.total);
+            ul.innerHTML += `
+                <li class="page-item disabled">
+                    <span class="page-link text-muted small">Mostrando ${pagination.total > 0 ? start : 0}-${end} de ${pagination.total}</span>
+                </li>
+            `;
+
+            // Next
+            ul.innerHTML += `
+                <li class="page-item ${pagination.page === pagination.pages ? 'disabled' : ''}">
+                    <button class="page-link" onclick="recPage++; loadRecommendations()">Siguiente</button>
+                </li>
+            `;
+        });
+    }
+
+    async function viewPolicyAnalysis(policyId, deviceId, btn) {
+        const rec = JSON.parse(btn.getAttribute('data-rec'));
+        const modal = new bootstrap.Modal(document.getElementById('policyAnalysisModal'));
+        const content = document.getElementById('policyAnalysisContent');
+
+        // Update Go To Policy Button Link (Deep Linking)
+        const linkBtn = document.getElementById('btn-go-to-policy');
+        if (linkBtn && deviceId) {
+            // Pass filter parameters to Policy Explorer
+            let url = `/policies?device_id=${deviceId}&q=${policyId}`;
+            if (rec.related_vdom) url += `&vdom=${encodeURIComponent(rec.related_vdom)}`;
+            linkBtn.href = url;
+        }
+
+        content.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p>Cargando detalles de la política...</p></div>';
+        modal.show();
+
+        try {
+            // Handle Implicit Deny (Policy 0)
+            if (policyId === '0' || policyId === 0) {
+                content.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6 border-end">
+                            <h6 class="fw-bold text-danger mb-3"><i class="bi bi-shield-x me-2"></i>Política Implícita (Implicit Deny)</h6>
+                            <div class="alert alert-secondary">
+                                <p class="small mb-2"><strong>ID:</strong> 0</p>
+                                <p class="small mb-2">Esta es la regla por defecto de FortiGate que deniega todo el tráfico que no coincide con ninguna otra política.</p>
+                                <hr>
+                                <p class="small mb-0"><strong>Acción:</strong> <span class="badge bg-danger">DENY</span></p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="fw-bold text-warning mb-3"><i class="bi bi-stars me-2"></i>Análisis AI y Sugerencia</h6>
+                            <div class="alert alert-light border border-warning">
+                                <h6 class="alert-heading small fw-bold">${rec.title}</h6>
+                                <p class="small mb-2">${rec.description}</p>
+                                <hr>
+                                <div class="bg-white p-2 rounded border">
+                                    <strong class="d-block small text-muted mb-1">Acción Recomendada:</strong>
+                                    <code class="text-dark">${rec.recommendation}</code>
+                                </div>
+                                ${rec.cli_remediation ? `
+                                    <div class="mt-2 bg-dark p-2 rounded border border-secondary">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <strong class="small text-light">CLI Remediation:</strong>
+                                            <button class="btn btn-xs btn-outline-secondary py-0" onclick="navigator.clipboard.writeText(this.parentElement.nextElementSibling.innerText)"><i class="bi bi-clipboard"></i></button>
+                                        </div>
+                                        <pre class="mb-0 text-success small" style="white-space: pre-wrap; font-family: monospace;">${rec.cli_remediation}</pre>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <div class="mt-3">
+                                <p class="small text-muted"><i class="bi bi-info-circle me-1"></i>Debe crear una nueva política explícita para permitir este tráfico si es legítimo.</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Fetch policy details for explicit policies
+            if (!deviceId || deviceId === 'None' || deviceId === 'undefined') {
+                // Try to get from filter
+                deviceId = document.querySelector('select[name="device_id"]').value;
+            }
+
+            if (!deviceId) {
+                content.innerHTML = '<div class="alert alert-danger">Error: No se pudo identificar el dispositivo asociado a esta política.</div>';
+                return;
+            }
+
+            // Use direct fetch to handle non-JSON errors better
+            const response = await fetch(`/api/v1/policies?device_id=${deviceId}&policy_id=${policyId}`, {
+                headers: {
+                    'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
+                    'X-Company-ID': localStorage.getItem('company_id') || ''
+                }
+            });
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Server Error (${response.status}): ${text.substring(0, 200)}...`);
+            }
+
+            const data = await response.json();
+
+            if (data.success && data.data && data.data.length > 0) {
+                const policy = data.data[0];
+
+                // Helper to format lists
+                const formatList = (items) => Array.isArray(items) && items.length > 0 ? items.map(i => `<span class="badge bg-light text-dark border me-1">${i}</span>`).join('') : '<span class="text-muted">ALL</span>';
+
+                // Extract details from raw_data if available for richer context
+                const raw = policy.raw_data || {};
+                const srcAddr = raw['Source Address'] || raw['Source'] || [policy.src_addr];
+                const dstAddr = raw['Destination Address'] || raw['Destination'] || [policy.dst_addr];
+                const services = raw['Service'] || [policy.service];
+                const schedule = raw['Schedule'] || 'always';
+                const logTraffic = raw['Log Traffic'] || 'all';
+
+                content.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-7 border-end">
+                            <h6 class="fw-bold text-primary mb-3">
+                                <i class="bi bi-sliders me-2"></i>Configuración de Política ID: <a href="/policies?device_id=${deviceId}&q=${policy.policy_id}&vdom=${encodeURIComponent(policy.vdom || '')}" target="_blank" class="text-decoration-none">${policy.policy_id} <i class="bi bi-box-arrow-up-right small ms-1 text-muted" style="font-size: 0.8em;"></i></a>
+                            </h6>
+                            
+                            <div class="card bg-light border-0 mb-3">
+                                <div class="card-body p-3">
+                                    <h6 class="card-title small fw-bold text-uppercase text-muted mb-2">General</h6>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-6">
+                                            <small class="d-block text-muted">Nombre</small>
+                                            <strong>${policy.name || '-'}</strong>
+                                        </div>
+                                        <div class="col-6">
+                                            <small class="d-block text-muted">Acción</small>
+                                            <span class="badge bg-${policy.action === 'ACCEPT' ? 'success' : 'danger'}">${policy.action}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <h6 class="card-title small fw-bold text-uppercase text-muted mt-3 mb-2">Reglas de Tráfico</h6>
+                                    <table class="table table-sm table-borderless small mb-0">
+                                        <tr>
+                                            <td style="width: 100px" class="text-muted">Origen:</td>
+                                            <td>${formatList(srcAddr)} <span class="text-muted ms-1">(${policy.src_intf})</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Destino:</td>
+                                            <td>${formatList(dstAddr)} <span class="text-muted ms-1">(${policy.dst_intf})</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Servicios:</td>
+                                            <td>${formatList(services)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Horario:</td>
+                                            <td>${schedule}</td>
+                                        </tr>
+                                         <tr>
+                                            <td class="text-muted">NAT:</td>
+                                            <td>${policy.nat === 'Enabled' ? '<i class="bi bi-check-circle-fill text-success"></i> Activado' : '<span class="text-muted">Desactivado</span>'}</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-5">
+                            <h6 class="fw-bold text-warning mb-3"><i class="bi bi-robot me-2"></i>Análisis de Seguridad AI</h6>
+                            <div class="alert alert-light border border-warning shadow-sm">
+                                <h6 class="alert-heading small fw-bold mb-2">${rec.title}</h6>
+                                <p class="small mb-3">${rec.description}</p>
+                                
+                                <div class="bg-white p-3 rounded border">
+                                    <h6 class="small fw-bold text-dark mb-2"><i class="bi bi-wrench-adjustable me-1"></i>Acción Recomendada</h6>
+                                    <p class="small text-muted mb-2">${rec.recommendation}</p>
+                                    
+                                    ${rec.cli_remediation ? `
+                                        <hr class="my-2">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <strong class="small text-secondary">Comando CLI Sugerido:</strong>
+                                            <button class="btn btn-xs btn-link text-decoration-none p-0" onclick="navigator.clipboard.writeText(this.parentElement.nextElementSibling.innerText)">
+                                                <i class="bi bi-clipboard"></i> Copiar
+                                            </button>
+                                        </div>
+                                        <div class="bg-dark rounded p-2 position-relative">
+                                            <pre class="mb-0 text-success small text-wrap font-monospace" style="font-size: 0.75rem;">${rec.cli_remediation}</pre>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                content.innerHTML = `<div class="alert alert-warning">No se encontró la política ID ${policyId} en la base de datos (puede haber sido borrada o no sincronizada).</div>`;
+            }
+        } catch (error) {
+            content.innerHTML = `<div class="alert alert-danger">Error obteniendo detalles: ${error.message}</div>`;
+        }
+    }
+
+    function refreshRecommendations() {
+        loadRecommendations();
+    }
+
+    // ============================================
+    // Configuration Tab Functions
+    // ============================================
+
+    function toggleApiKeyVisibility() {
+        const input = document.getElementById('gemini-api-key');
+        const icon = document.getElementById('eye-icon');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('bi-eye');
+            icon.classList.add('bi-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('bi-eye-slash');
+            icon.classList.add('bi-eye');
+        }
+    }
+
+    async function loadConfigStatus() {
+        const statusBadge = document.getElementById('api-key-status');
+        try {
+            const data = await apiCall('/logs/config');
+            if (data.has_api_key) {
+                statusBadge.className = 'badge bg-success me-2';
+                statusBadge.textContent = 'Configurado';
+            } else {
+                statusBadge.className = 'badge bg-warning me-2';
+                statusBadge.textContent = 'No configurado';
+            }
+        } catch (error) {
+            statusBadge.className = 'badge bg-danger me-2';
+            statusBadge.textContent = 'Error';
+        }
+    }
+
+    document.getElementById('gemini-config-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('btn-save-config');
+        const apiKey = document.getElementById('gemini-api-key').value;
+
+        if (!apiKey) {
+            alert('Por favor ingresa una API Key');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
+
+        try {
+            const response = await apiCall('/logs/config', 'POST', JSON.stringify({ gemini_api_key: apiKey }));
+            alert('Configuración guardada correctamente');
+            document.getElementById('gemini-api-key').value = '';
+            loadConfigStatus();
+        } catch (error) {
+            alert('Error al guardar: ' + error.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Guardar Configuración';
+        }
+    });
+
+    // Load config status when tab is shown
+    document.getElementById('config-tab')?.addEventListener('shown.bs.tab', () => {
+        loadConfigStatus();
+    });
+
+    // Deletion Functions
+    async function confirmDeleteLogs() {
+        if (!confirm('ADVERTENCIA: ¿Está seguro de eliminar TODOS los logs y estadísticas?\n\nEsta acción no se puede deshacer.')) return;
+
+        try {
+            const deviceId = document.querySelector('select[name="device_id"]').value;
+            let url = '/logs';
+            if (deviceId) url += `?device_id=${deviceId}`;
+
+            const btn = document.getElementById('actionsDropdown');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Eliminando...';
+
+            const data = await apiCall(url, 'DELETE');
+            if (data.success) {
+                alert(`Se eliminaron ${data.deleted_count} registros.`);
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Desconocido'));
+            }
+        } catch (error) {
+            alert('Error al eliminar logs: ' + error.message);
+        } finally {
+            const btn = document.getElementById('actionsDropdown');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+    }
+
+    async function confirmDeleteRecommendations() {
+        if (!confirm('¿Está seguro de eliminar todas las recomendaciones de seguridad?')) return;
+
+        try {
+            const deviceId = document.querySelector('select[name="device_id"]').value;
+            let url = '/logs/recommendations';
+            if (deviceId) url += `?device_id=${deviceId}`;
+
+            const data = await apiCall(url, 'DELETE');
+            if (data.success) {
+                alert(`Se eliminaron ${data.deleted_count} recomendaciones.`);
+                refreshRecommendations();
+            } else {
+                alert('Error: ' + (data.error || 'Desconocido'));
+            }
+        } catch (error) {
+            alert('Error al eliminar recomendaciones: ' + error.message);
+        }
+    }
+
+</script>
+{% endblock %}

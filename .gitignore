@@ -38,6 +38,7 @@ app/static/uploads/*
 # Logs
 *.log
 logs/
+!app/templates/logs/
 
 # Example configs with sensitive data
 example/

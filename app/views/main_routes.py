@@ -87,6 +87,11 @@ def edit_company():
                 file.save(upload_path)
                 company.logo = unique_filename
         
+        # Gemini API Key (only for admin/global roles or company admin)
+        gemini_api_key = request.form.get('gemini_api_key')
+        if gemini_api_key is not None:
+             company.gemini_api_key = gemini_api_key
+
         db.session.commit()
         
         session['company_name'] = company.name # Update Session

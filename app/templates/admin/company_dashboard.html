@@ -69,22 +69,34 @@
                     </div>
                 </div>
 
-                <!-- Log Analyzer (Coming Soon) -->
+                <!-- Log Analyzer -->
                 {% set logs_active = 'log_analyzer' in company.products %}
                 <div class="col-md-6">
-                    <div class="card h-100 border-0 shadow-sm {{ 'opacity-50' if not logs_active else '' }}">
+                    <div
+                        class="card h-100 border-0 shadow-sm transition hover-shadow {{ '' if logs_active else 'opacity-50' }}">
                         <div class="card-body p-4">
                             <div class="d-flex justify-content-between align-items-start mb-3">
-                                <div class="h2 text-secondary">
+                                <div class="h2 {{ 'text-primary' if logs_active else 'text-secondary' }}">
                                     <i class="bi bi-file-bar-graph"></i>
                                 </div>
-                                <span class="badge bg-light text-muted">Próximamente</span>
+                                {% if logs_active %}
+                                <span class="badge bg-primary-soft text-primary">Activo</span>
+                                {% else %}
+                                <span class="badge bg-light text-muted">Deshabilitado</span>
+                                {% endif %}
                             </div>
                             <h4 class="card-title h5 fw-bold">Log Analyzer</h4>
                             <p class="card-text text-muted small mb-4">
                                 Análisis de logs y detección de amenazas en tiempo real.
                             </p>
-                            <button disabled class="btn btn-outline-secondary w-100">Proximamente</button>
+                            {% if logs_active %}
+                            <a href="{{ url_for('log_analytics.index') }}"
+                                class="btn btn-primary w-100 stretched-link">Ingresar</a>
+                            {% else %}
+                            <button disabled class="btn btn-outline-secondary w-100">
+                                <i class="bi bi-lock-fill"></i> No Habilitado
+                            </button>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -225,6 +237,17 @@
                                 if 'log_analyzer' in company.products %}checked{% endif %}>
                             <label class="form-check-label">Log Analyzer</label>
                         </div>
+                    </div>
+
+                    <!-- Gemini/AI Configuration -->
+                    <div class="mb-3">
+                        <label class="form-label">Gemini API Key (Log Analyzer AI)</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-key"></i></span>
+                            <input type="password" name="gemini_api_key" class="form-control"
+                                value="{{ company.gemini_api_key or '' }}" placeholder="AIzaSy...">
+                        </div>
+                        <div class="form-text">Dejar vacío para usar conf. global.</div>
                     </div>
                 </div>
                 <div class="modal-footer">

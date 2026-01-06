@@ -11,6 +11,7 @@ class Company(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     products = db.Column(db.JSON, default=list) # List of enabled products, e.g. ["policy_explorer"]
     logo = db.Column(db.String(255), nullable=True) # Filename of the uploaded logo
+    gemini_api_key = db.Column(db.String(255), nullable=True) # Encrypted or plain API key for AI features
 
     # Relationship to roles/users
     user_roles = db.relationship('UserCompanyRole', backref='company', lazy='dynamic', cascade="all, delete-orphan")

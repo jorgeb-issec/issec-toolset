@@ -280,7 +280,8 @@
                         </p>
 
                         {% if logs_active %}
-                        <button disabled class="btn btn-secondary w-100">Próximamente</button>
+                        <a href="{{ url_for('log_analytics.index') }}"
+                            class="btn btn-secondary w-100 stretched-link">Ingresar</a>
                         {% else %}
                         <button disabled class="btn btn-outline-secondary w-100">
                             <i class="bi bi-lock-fill"></i> No Habilitado
@@ -346,6 +347,17 @@
                                 if 'log_analyzer' in company.products %}checked{% endif %}>
                             <label class="form-check-label">Log Analyzer</label>
                         </div>
+                    </div>
+
+                    <!-- Gemini/AI Configuration -->
+                    <div class="mb-3">
+                        <label>Gemini API Key (para Log Analyzer AI)</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-key"></i></span>
+                            <input type="password" name="gemini_api_key" class="form-control"
+                                value="{{ company.gemini_api_key or '' }}" placeholder="AIzaSy...">
+                        </div>
+                        <small class="text-muted">Dejar vacío para usar configuración global o deshabilitar IA</small>
                     </div>
                 </div>
                 <div class="modal-footer">
