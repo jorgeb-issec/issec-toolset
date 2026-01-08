@@ -275,6 +275,37 @@
                         </div>
                         <div class="card-body">
                             <form id="ai-params-form">
+                                <!-- v1.3.0 - Segmentation Filters -->
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold"><i
+                                            class="bi bi-filter me-1"></i>Segmentación</label>
+                                    <select class="form-select form-select-sm mb-2" id="ai-device"
+                                        onchange="loadVdomsForDevice()">
+                                        <option value="">Todos los Equipos</option>
+                                        {% for d in devices %}
+                                        <option value="{{ d.id }}">{{ d.nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <select class="form-select form-select-sm mb-2" id="ai-vdom"
+                                        onchange="loadInterfacesForVdom()">
+                                        <option value="">Todos los VDOMs</option>
+                                    </select>
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <select class="form-select form-select-sm" id="ai-src-intf">
+                                                <option value="">Src Interface</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-6">
+                                            <select class="form-select form-select-sm" id="ai-dst-intf">
+                                                <option value="">Dst Interface</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr class="my-2">
+
                                 <div class="mb-3">
                                     <label class="form-label small fw-bold">Enfoques de Análisis</label>
                                     <div class="form-check">
@@ -302,9 +333,9 @@
                                         </label>
                                     </div>
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="ai-new-policies">
+                                        <input class="form-check-input" type="checkbox" id="ai-new-policies" checked>
                                         <label class="form-check-label small" for="ai-new-policies">
-                                            Sugerir nuevas políticas
+                                            <i class="bi bi-plus-circle text-success me-1"></i>Sugerir nuevas políticas
                                         </label>
                                     </div>
                                 </div>
@@ -749,19 +780,26 @@
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Analizando...';
 
-        // Collect AI parameters
+        // Collect AI parameters including v1.3.0 segmentation
         const params = {
             analyze_denied: document.getElementById('ai-denied').checked,
             analyze_high_volume: document.getElementById('ai-high-volume').checked,
             analyze_geo: document.getElementById('ai-geo').checked,
             optimize_policies: document.getElementById('ai-policy-opt').checked,
             suggest_new_policies: document.getElementById('ai-new-policies').checked,
-            threshold: document.getElementById('ai-threshold').value
+            threshold: document.getElementById('ai-threshold').value,
+            // v1.3.0 - Segmentation filters
+            device_id: document.getElementById('ai-device').value || null,
+            vdom: document.getElementById('ai-vdom').value || null,
+            src_intf: document.getElementById('ai-src-intf').value || null,
+            dst_intf: document.getElementById('ai-dst-intf').value || null
         };
 
         try {
             const result = await apiCall('/logs/analyze', 'POST', JSON.stringify(params));
-            alert('Análisis completado. Se generaron ' + (result.recommendations_count || 0) + ' recomendaciones.');
+            const recCount = result.recommendations_count || 0;
+            const newPolicies = result.new_policies_count || 0;
+            alert(`Análisis completado. Se generaron ${recCount} recomendaciones${newPolicies > 0 ? ` y ${newPolicies} nuevas políticas sugeridas` : ''}.`);
             loadRecommendations();
             loadStats();
         } catch (error) {
@@ -770,6 +808,72 @@
             btn.disabled = false;
             btn.innerHTML = originalText;
         }
+    }
+
+    // v1.3.0 - Dynamic dropdown loaders for segmentation
+    async function loadVdomsForDevice() {
+        const deviceId = document.getElementById('ai-device').value;
+        const vdomSelect = document.getElementById('ai-vdom');
+        const srcIntfSelect = document.getElementById('ai-src-intf');
+        const dstIntfSelect = document.getElementById('ai-dst-intf');
+
+        // Reset dependent dropdowns
+        vdomSelect.innerHTML = '<option value="">Todos los VDOMs</option>';
+        srcIntfSelect.innerHTML = '<option value="">Src Interface</option>';
+        dstIntfSelect.innerHTML = '<option value="">Dst Interface</option>';
+
+        if (!deviceId) return;
+
+        try {
+            // Load VDOMs from logs (distinct values)
+            const data = await apiCall(`/logs/stats?device_id=${deviceId}`);
+            if (data.success && data.data.by_vdom) {
+                Object.keys(data.data.by_vdom).forEach(vdom => {
+                    const opt = document.createElement('option');
+                    opt.value = vdom;
+                    opt.textContent = vdom;
+                    vdomSelect.appendChild(opt);
+                });
+            }
+            // Also load interfaces
+            loadInterfacesForDevice(deviceId);
+        } catch (e) {
+            console.warn('Could not load VDOMs:', e);
+        }
+    }
+
+    async function loadInterfacesForDevice(deviceId) {
+        const srcIntfSelect = document.getElementById('ai-src-intf');
+        const dstIntfSelect = document.getElementById('ai-dst-intf');
+
+        try {
+            // Get unique interfaces from logs
+            const data = await apiCall(`/logs?device_id=${deviceId}&per_page=1`);
+            if (data.success) {
+                // Use stats to get interface breakdown
+                const statsData = await apiCall(`/logs/stats?device_id=${deviceId}`);
+                if (statsData.success && statsData.data.by_src_intf) {
+                    Object.keys(statsData.data.by_src_intf).forEach(intf => {
+                        const opt1 = document.createElement('option');
+                        opt1.value = intf;
+                        opt1.textContent = intf;
+                        srcIntfSelect.appendChild(opt1);
+
+                        const opt2 = document.createElement('option');
+                        opt2.value = intf;
+                        opt2.textContent = intf;
+                        dstIntfSelect.appendChild(opt2);
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('Could not load interfaces:', e);
+        }
+    }
+
+    function loadInterfacesForVdom() {
+        // Could filter interfaces by VDOM if needed
+        // For now, keep all interfaces loaded
     }
 
     let recPage = 1;

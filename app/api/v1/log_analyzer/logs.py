@@ -502,6 +502,24 @@ def api_log_stats():
      .order_by(desc('count'))\
      .limit(20).all()
     
+    # v1.3.0 - By source interface
+    src_intf_query = g.tenant_session.query(
+        LogEntry.src_intf,
+        func.count(LogEntry.id).label('count')
+    ).filter(LogEntry.src_intf.isnot(None))
+    if filters:
+        src_intf_query = src_intf_query.filter(*filters)
+    src_intf_stats = src_intf_query.group_by(LogEntry.src_intf).all()
+    
+    # v1.3.0 - By destination interface
+    dst_intf_query = g.tenant_session.query(
+        LogEntry.dst_intf,
+        func.count(LogEntry.id).label('count')
+    ).filter(LogEntry.dst_intf.isnot(None))
+    if filters:
+        dst_intf_query = dst_intf_query.filter(*filters)
+    dst_intf_stats = dst_intf_query.group_by(LogEntry.dst_intf).all()
+    
     return jsonify({
         'success': True,
         'data': {
@@ -509,6 +527,8 @@ def api_log_stats():
             'by_action': {r[0]: r[1] for r in action_stats if r[0]},
             'by_type': {r[0]: r[1] for r in type_stats if r[0]},
             'by_vdom': {r[0]: r[1] for r in vdom_stats if r[0]},
+            'by_src_intf': {r[0]: r[1] for r in src_intf_stats if r[0]},
+            'by_dst_intf': {r[0]: r[1] for r in dst_intf_stats if r[0]},
             'top_policies': [
                 {'policy_id': r[0], 'count': r[1], 'bytes': r[2] or 0}
                 for r in policy_stats
@@ -653,10 +673,16 @@ def api_run_ai_analysis():
     suggest_new_policies = data.get('suggest_new_policies', False)
     threshold = data.get('threshold', 'medium')
     
+    # v1.3.0 - Segmentation filters
+    filter_device_id = data.get('device_id')
+    filter_vdom = data.get('vdom')
+    filter_src_intf = data.get('src_intf')
+    filter_dst_intf = data.get('dst_intf')
+    
     # Get date range from request, default to last 30 days
     from datetime import datetime, timedelta
     
-    days_back = data.get('days_back', 30)  # Default 30 days instead of 24 hours
+    days_back = data.get('days_back', 30)
     start_date = data.get('start_date')
     end_date = data.get('end_date')
     
@@ -679,12 +705,30 @@ def api_run_ai_analysis():
         except:
             pass
     
+    # v1.3.0 - Apply segmentation filters
+    if filter_device_id:
+        query = query.filter(LogEntry.device_id == filter_device_id)
+    if filter_vdom:
+        query = query.filter(LogEntry.vdom == filter_vdom)
+    if filter_src_intf:
+        query = query.filter(LogEntry.src_intf == filter_src_intf)
+    if filter_dst_intf:
+        query = query.filter(LogEntry.dst_intf == filter_dst_intf)
+    
     logs = query.limit(10000).all()
     
     if not logs:
+        filter_desc = []
+        if filter_vdom:
+            filter_desc.append(f"VDOM={filter_vdom}")
+        if filter_src_intf:
+            filter_desc.append(f"src_intf={filter_src_intf}")
+        if filter_dst_intf:
+            filter_desc.append(f"dst_intf={filter_dst_intf}")
+        filter_str = ", ".join(filter_desc) if filter_desc else f"last {days_back} days"
         return jsonify({
             'success': False,
-            'error': f'No logs found for analysis in the last {days_back} days. Import logs first or adjust the date range.'
+            'error': f'No logs found for analysis ({filter_str}). Adjust filters or import logs.'
         }), 400
     
     # Prepare normalized logs for analysis
@@ -790,12 +834,45 @@ def api_run_ai_analysis():
             if analyze_high_volume:
                 sample_logs.extend(analysis['stats'].get('high_volume_sessions', [])[:10])
             
+            # v1.3.0 - Get interface context for AI
+            interface_context = []
+            vdom_list = set()
+            try:
+                from app.models.interface import Interface
+                if device_ids:
+                    interfaces = g.tenant_session.query(Interface).filter(
+                        Interface.device_id.in_(list(device_ids))
+                    ).all()
+                    interface_context = [
+                        {'name': i.name, 'role': i.role, 'zone': i.zone, 'ip': i.ip_address}
+                        for i in interfaces
+                    ]
+                # Get unique VDOMs from logs
+                vdom_list = set(log.vdom for log in logs if log.vdom)
+            except Exception as e:
+                current_app.logger.warning(f"Could not load interface context: {e}")
+            
+            # Build segmentation context
+            segmentation_context = {}
+            if filter_vdom:
+                segmentation_context['vdom'] = filter_vdom
+            if filter_src_intf:
+                segmentation_context['src_intf'] = filter_src_intf
+            if filter_dst_intf:
+                segmentation_context['dst_intf'] = filter_dst_intf
+            if filter_device_id:
+                segmentation_context['device_id'] = str(filter_device_id)
+            
             ai_result = AIService.analyze_security_logs(
                 ai_stats, 
                 sample_logs, 
                 api_key=ai_key,
                 focus_areas=focus_areas,
-                policies=policy_configs
+                policies=policy_configs,
+                interfaces=interface_context,
+                vdoms=list(vdom_list),
+                generate_new_policies=suggest_new_policies,
+                segmentation=segmentation_context if segmentation_context else None
             )
             
             if 'recommendations' in ai_result:
@@ -810,10 +887,31 @@ def api_run_ai_analysis():
                             'recommendation': ai_rec.get('action', ''),
                             'cli_remediation': ai_rec.get('cli_remediation', ''),
                             'related_policy_id': ai_rec.get('related_policy_id'),
+                            'affected_interfaces': ai_rec.get('affected_interfaces', []),
                             'affected_count': 0
                         })
+            
+            # v1.3.0 - Handle new policy suggestions from AI
+            if 'new_policies' in ai_result and ai_result['new_policies']:
+                for new_pol in ai_result['new_policies']:
+                    recommendations.append({
+                        'category': 'ai_new_policy',
+                        'severity': 'medium',
+                        'title': f"[AI NEW] {new_pol.get('name', 'Suggested Policy')}",
+                        'description': new_pol.get('description', 'AI-generated policy based on observed traffic'),
+                        'recommendation': f"Create policy: {new_pol.get('src_intf', 'any')} → {new_pol.get('dst_intf', 'any')} [{', '.join(new_pol.get('service', []))}]",
+                        'cli_remediation': new_pol.get('cli_command', ''),
+                        'related_policy_id': None,
+                        'affected_interfaces': [new_pol.get('src_intf'), new_pol.get('dst_intf')],
+                        'affected_count': 0
+                    })
+            
+            # v1.3.0 - Store traffic flow analysis if present
+            traffic_flows = ai_result.get('traffic_flows', [])
+            
         except Exception as e:
             current_app.logger.warning(f"AI Analysis failed: {e}")
+            traffic_flows = []
     
     # Store recommendations in database  
     device_ids = set(log.device_id for log in logs if log.device_id)
