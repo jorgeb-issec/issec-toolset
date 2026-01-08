@@ -100,7 +100,6 @@ class AIService:
            - Detect anomalies in zone-to-zone traffic
         
         4. **POLICY OPTIMIZATION** (CRITICAL - READ CAREFULLY):
-           ⚠️ NEVER RECOMMEND "DISABLE" OR "DESHABILITAR" A POLICY ⚠️
            
            For overly permissive policies, you MUST:
            a) Analyze the ACTUAL traffic in the logs
