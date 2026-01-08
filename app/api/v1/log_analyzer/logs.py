@@ -847,6 +847,15 @@ def api_run_ai_analysis():
                         {'name': i.name, 'role': i.role, 'zone': i.zone, 'ip': i.ip_address}
                         for i in interfaces
                     ]
+            except Exception as intf_err:
+                # Interface table may not exist in tenant DB yet - rollback failed transaction
+                current_app.logger.warning(f"Could not load interface context (table may not exist): {intf_err}")
+                try:
+                    g.tenant_session.rollback()
+                except:
+                    pass
+            
+            try:
                 # Get unique VDOMs from logs
                 vdom_list = set(log.vdom for log in logs if log.vdom)
             except Exception as e:
