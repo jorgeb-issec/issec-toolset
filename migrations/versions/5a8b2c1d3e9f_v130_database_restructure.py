@@ -18,16 +18,27 @@ This migration adds:
 - vdom_history table
 - vdom_id FK to policies, log_entries, policy_history
 - src_intf_id/dst_intf_id FKs to log_entries
+
+Note: This migration supports multi-tenant architecture where some tables
+only exist in tenant databases, not in the central database.
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = '5a8b2c1d3e9f'
 down_revision = '16ff0ae3e3b2'
 branch_labels = None
 depends_on = None
+
+
+def table_exists(table_name):
+    """Check if a table exists in the current database."""
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    return table_name in inspector.get_table_names()
 
 
 def upgrade():
@@ -278,53 +289,72 @@ def upgrade():
     )
     op.create_index('ix_vdom_history_vdom_id', 'vdom_history', ['vdom_id'])
 
-    # ========== MODIFY EXISTING TABLES ==========
+    # ========== MODIFY EXISTING TABLES (conditionally for multi-tenant) ==========
 
-    # --- policies: Add vdom_id FK ---
-    op.add_column('policies', sa.Column('vdom_id', postgresql.UUID(as_uuid=True), nullable=True))
-    op.create_index('ix_policies_vdom_id', 'policies', ['vdom_id'])
-    op.create_foreign_key('fk_policies_vdom_id', 'policies', 'vdoms', ['vdom_id'], ['id'], ondelete='SET NULL')
+    # --- policies: Add vdom_id FK (if policies table exists) ---
+    if table_exists('policies'):
+        op.add_column('policies', sa.Column('vdom_id', postgresql.UUID(as_uuid=True), nullable=True))
+        op.create_index('ix_policies_vdom_id', 'policies', ['vdom_id'])
+        if table_exists('vdoms'):
+            op.create_foreign_key('fk_policies_vdom_id', 'policies', 'vdoms', ['vdom_id'], ['id'], ondelete='SET NULL')
 
-    # --- log_entries: Add vdom_id, src_intf_id, dst_intf_id FKs ---
-    op.add_column('log_entries', sa.Column('vdom_id', postgresql.UUID(as_uuid=True), nullable=True))
-    op.add_column('log_entries', sa.Column('src_intf_id', postgresql.UUID(as_uuid=True), nullable=True))
-    op.add_column('log_entries', sa.Column('dst_intf_id', postgresql.UUID(as_uuid=True), nullable=True))
-    op.create_index('ix_log_entries_vdom_id', 'log_entries', ['vdom_id'])
-    op.create_index('ix_log_entries_src_intf_id', 'log_entries', ['src_intf_id'])
-    op.create_index('ix_log_entries_dst_intf_id', 'log_entries', ['dst_intf_id'])
-    op.create_foreign_key('fk_log_entries_vdom_id', 'log_entries', 'vdoms', ['vdom_id'], ['id'], ondelete='SET NULL')
-    op.create_foreign_key('fk_log_entries_src_intf_id', 'log_entries', 'interfaces', ['src_intf_id'], ['id'], ondelete='SET NULL')
-    op.create_foreign_key('fk_log_entries_dst_intf_id', 'log_entries', 'interfaces', ['dst_intf_id'], ['id'], ondelete='SET NULL')
+    # --- log_entries: Add vdom_id, src_intf_id, dst_intf_id FKs (if log_entries table exists) ---
+    if table_exists('log_entries'):
+        op.add_column('log_entries', sa.Column('vdom_id', postgresql.UUID(as_uuid=True), nullable=True))
+        op.add_column('log_entries', sa.Column('src_intf_id', postgresql.UUID(as_uuid=True), nullable=True))
+        op.add_column('log_entries', sa.Column('dst_intf_id', postgresql.UUID(as_uuid=True), nullable=True))
+        op.create_index('ix_log_entries_vdom_id', 'log_entries', ['vdom_id'])
+        op.create_index('ix_log_entries_src_intf_id', 'log_entries', ['src_intf_id'])
+        op.create_index('ix_log_entries_dst_intf_id', 'log_entries', ['dst_intf_id'])
+        if table_exists('vdoms'):
+            op.create_foreign_key('fk_log_entries_vdom_id', 'log_entries', 'vdoms', ['vdom_id'], ['id'], ondelete='SET NULL')
+        if table_exists('interfaces'):
+            op.create_foreign_key('fk_log_entries_src_intf_id', 'log_entries', 'interfaces', ['src_intf_id'], ['id'], ondelete='SET NULL')
+            op.create_foreign_key('fk_log_entries_dst_intf_id', 'log_entries', 'interfaces', ['dst_intf_id'], ['id'], ondelete='SET NULL')
 
-    # --- policy_history: Add vdom_id FK ---
-    op.add_column('policy_history', sa.Column('vdom_id', postgresql.UUID(as_uuid=True), nullable=True))
-    op.create_index('ix_policy_history_vdom_id', 'policy_history', ['vdom_id'])
-    op.create_foreign_key('fk_policy_history_vdom_id', 'policy_history', 'vdoms', ['vdom_id'], ['id'], ondelete='SET NULL')
+    # --- policy_history: Add vdom_id FK (if policy_history table exists) ---
+    if table_exists('policy_history'):
+        op.add_column('policy_history', sa.Column('vdom_id', postgresql.UUID(as_uuid=True), nullable=True))
+        op.create_index('ix_policy_history_vdom_id', 'policy_history', ['vdom_id'])
+        if table_exists('vdoms'):
+            op.create_foreign_key('fk_policy_history_vdom_id', 'policy_history', 'vdoms', ['vdom_id'], ['id'], ondelete='SET NULL')
 
 
 def downgrade():
     # ========== REVERT EXISTING TABLE MODIFICATIONS ==========
     
-    # --- policy_history ---
-    op.drop_constraint('fk_policy_history_vdom_id', 'policy_history', type_='foreignkey')
-    op.drop_index('ix_policy_history_vdom_id', table_name='policy_history')
-    op.drop_column('policy_history', 'vdom_id')
+    # --- policy_history (if exists) ---
+    if table_exists('policy_history'):
+        try:
+            op.drop_constraint('fk_policy_history_vdom_id', 'policy_history', type_='foreignkey')
+        except:
+            pass
+        op.drop_index('ix_policy_history_vdom_id', table_name='policy_history')
+        op.drop_column('policy_history', 'vdom_id')
 
-    # --- log_entries ---
-    op.drop_constraint('fk_log_entries_dst_intf_id', 'log_entries', type_='foreignkey')
-    op.drop_constraint('fk_log_entries_src_intf_id', 'log_entries', type_='foreignkey')
-    op.drop_constraint('fk_log_entries_vdom_id', 'log_entries', type_='foreignkey')
-    op.drop_index('ix_log_entries_dst_intf_id', table_name='log_entries')
-    op.drop_index('ix_log_entries_src_intf_id', table_name='log_entries')
-    op.drop_index('ix_log_entries_vdom_id', table_name='log_entries')
-    op.drop_column('log_entries', 'dst_intf_id')
-    op.drop_column('log_entries', 'src_intf_id')
-    op.drop_column('log_entries', 'vdom_id')
+    # --- log_entries (if exists) ---
+    if table_exists('log_entries'):
+        try:
+            op.drop_constraint('fk_log_entries_dst_intf_id', 'log_entries', type_='foreignkey')
+            op.drop_constraint('fk_log_entries_src_intf_id', 'log_entries', type_='foreignkey')
+            op.drop_constraint('fk_log_entries_vdom_id', 'log_entries', type_='foreignkey')
+        except:
+            pass
+        op.drop_index('ix_log_entries_dst_intf_id', table_name='log_entries')
+        op.drop_index('ix_log_entries_src_intf_id', table_name='log_entries')
+        op.drop_index('ix_log_entries_vdom_id', table_name='log_entries')
+        op.drop_column('log_entries', 'dst_intf_id')
+        op.drop_column('log_entries', 'src_intf_id')
+        op.drop_column('log_entries', 'vdom_id')
 
-    # --- policies ---
-    op.drop_constraint('fk_policies_vdom_id', 'policies', type_='foreignkey')
-    op.drop_index('ix_policies_vdom_id', table_name='policies')
-    op.drop_column('policies', 'vdom_id')
+    # --- policies (if exists) ---
+    if table_exists('policies'):
+        try:
+            op.drop_constraint('fk_policies_vdom_id', 'policies', type_='foreignkey')
+        except:
+            pass
+        op.drop_index('ix_policies_vdom_id', table_name='policies')
+        op.drop_column('policies', 'vdom_id')
 
     # ========== DROP NEW TABLES (reverse order of creation) ==========
     
