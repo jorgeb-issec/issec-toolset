@@ -9,8 +9,12 @@ class Policy(db.Model):
     uuid = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     device_id = db.Column(UUID(as_uuid=True), db.ForeignKey('equipos.id'), nullable=False)
     
-    # --- Datos Meta ---
+    # --- VDOM linkage (v1.3.0) ---
+    # FK to VDOM table for proper relationship queries
+    vdom_id = db.Column(UUID(as_uuid=True), db.ForeignKey('vdoms.id'), nullable=True, index=True)
+    # Keep string vdom for backwards compatibility and display
     vdom = db.Column(db.String(50), nullable=False, default="root")
+    
     policy_id = db.Column(db.String(50), index=True) 
     
     # --- Columnas Indexadas (NECESARIAS para los filtros .ilike y ordenamiento) ---
@@ -33,6 +37,9 @@ class Policy(db.Model):
     # --- EL JSON COMPLETO ---
     raw_data = db.Column(JSONB)
 
+    # --- Relationships (v1.3.0) ---
+    vdom_ref = db.relationship('VDOM', backref=db.backref('policies', lazy='dynamic'))
+    
     # --- Propiedades Virtuales (Para visualización) ---
     @property
     def bytes_raw(self):

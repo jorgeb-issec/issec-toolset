@@ -2,6 +2,24 @@
 
 Todos los cambios notables en este proyecto serán documentados en este archivo.
 
+## [1.3.0] - 2026-01-08
+
+### Agregado - Base de Datos
+- **Interfaces**: Nueva tabla `interfaces` para almacenamiento normalizado de interfaces
+- **Address Objects**: Nueva tabla `address_objects` para objetos de dirección FortiGate
+- **Service Objects**: Nueva tabla `service_objects` para definiciones de servicios
+- **VPN Tunnels**: Nueva tabla `vpn_tunnels` para seguimiento de túneles IPSec/SSL-VPN
+- **Tablas de Mapeo N:M**: `policy_interface_mappings`, `policy_address_mappings`, `policy_service_mappings`
+- **Alertas de Seguridad**: `allowed_access_alerts` y `server_exposures` para análisis de riesgos
+- **Historial**: `interface_history` y `vdom_history` para auditoría
+
+### Modificado
+- `policies`: Agregado `vdom_id` FK para vincular con VDOMs
+- `log_entries`: Agregado `vdom_id`, `src_intf_id`, `dst_intf_id` FKs
+- `policy_history`: Agregado `vdom_id` FK
+
+---
+
 ## [1.1b] - 2024-12-26
 
 ### Agregado

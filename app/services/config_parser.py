@@ -122,21 +122,33 @@ class ConfigParserService:
 
         # 5. Interfaces
         # Parse 'config system interface' ... 'end'
-        # We need a robust parser for nested blocks. 
-        # Simple regex for 'edit "name" ... next'
+        # Handle nested blocks (config ipv6...end) by finding the LAST 'end' at the correct indentation
+        # or by finding the block that ends with 'end' at the start of a line (not indented)
         
-        interface_block_match = re.search(r'config system interface(.*?)end', content, re.DOTALL)
+        # Find all interface blocks using 'edit' and 'next' as delimiters
+        # First, find the entire 'config system interface' section
+        # Use a regex that matches 'config system interface' followed by content until a standalone 'end'
+        interface_block_match = re.search(r'config system interface\s*\n(.*?)(?:^end$|\nend\n)', content, re.DOTALL | re.MULTILINE)
         if interface_block_match:
             intf_text = interface_block_match.group(1)
-            # Split by 'edit '
-            edits = intf_text.split('edit "')
+            
+            # Split by 'edit ' - handles both quoted ("port1") and unquoted (port1) names
+            # Pattern: edit "name" or edit name
+            edits = re.split(r'\n\s*edit\s+', intf_text)
             for edit in edits[1:]: # Skip preamble
-                # Extract name "port1" ...
-                end_quote_idx = edit.find('"')
-                if end_quote_idx == -1: continue
-                
-                name = edit[:end_quote_idx]
-                block_content = edit[end_quote_idx+1:]
+                # Extract interface name - handle both "quoted" and unquoted names
+                if edit.startswith('"'):
+                    # Quoted name: edit "port1"
+                    end_quote_idx = edit.find('"', 1)
+                    if end_quote_idx == -1: continue
+                    name = edit[1:end_quote_idx]
+                    block_content = edit[end_quote_idx+1:]
+                else:
+                    # Unquoted name: edit port1
+                    end_name_match = re.match(r'(\S+)', edit)
+                    if not end_name_match: continue
+                    name = end_name_match.group(1)
+                    block_content = edit[len(name):]
                 
                 # Extract params
                 ip_match = re.search(r'set ip (\d+\.\d+\.\d+\.\d+) (\d+\.\d+\.\d+\.\d+)', block_content)

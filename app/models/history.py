@@ -10,6 +10,7 @@ class PolicyHistory(db.Model):
     
     device_id = db.Column(UUID(as_uuid=True), db.ForeignKey('equipos.id'), nullable=False)
     vdom = db.Column(db.String(50), nullable=False, index=True)  # VDOM name for filtering
+    vdom_id = db.Column(UUID(as_uuid=True), db.ForeignKey('vdoms.id'), nullable=True, index=True)  # v1.3.0 FK
     
     # Group changes from the same import session
     import_session_id = db.Column(UUID(as_uuid=True), nullable=True, index=True)

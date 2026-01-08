@@ -24,6 +24,9 @@ class LogEntry(db.Model):
     # Foreign Keys
     device_id = db.Column(UUID(as_uuid=True), db.ForeignKey('equipos.id'), index=True)
     
+    # v1.3.0 - VDOM FK for proper relationship queries
+    vdom_id = db.Column(UUID(as_uuid=True), db.ForeignKey('vdoms.id'), nullable=True, index=True)
+    
     # Log Identification
     log_id = db.Column(db.String(50))  # From logid field
     log_type = db.Column(db.String(50), index=True)  # traffic, event, ips, etc.
@@ -42,6 +45,7 @@ class LogEntry(db.Model):
     
     # Source Info
     src_intf = db.Column(db.String(100))  # srcintf
+    src_intf_id = db.Column(UUID(as_uuid=True), db.ForeignKey('interfaces.id'), nullable=True, index=True)  # v1.3.0
     src_intf_role = db.Column(db.String(50))  # srcintfrole
     src_ip = db.Column(db.String(50), index=True)
     src_port = db.Column(db.Integer)
@@ -51,6 +55,7 @@ class LogEntry(db.Model):
     
     # Destination Info
     dst_intf = db.Column(db.String(100))  # dstintf
+    dst_intf_id = db.Column(UUID(as_uuid=True), db.ForeignKey('interfaces.id'), nullable=True, index=True)  # v1.3.0
     dst_intf_role = db.Column(db.String(50))  # dstintfrole
     dst_ip = db.Column(db.String(50), index=True)
     dst_port = db.Column(db.Integer)
@@ -93,6 +98,9 @@ class LogEntry(db.Model):
     
     # Relationships
     device = db.relationship('Equipo', backref='log_entries')
+    vdom_ref = db.relationship('VDOM', backref=db.backref('log_entries', lazy='dynamic'))
+    src_interface = db.relationship('Interface', foreign_keys=[src_intf_id], backref='logs_as_src')
+    dst_interface = db.relationship('Interface', foreign_keys=[dst_intf_id], backref='logs_as_dst')
     
     def __repr__(self):
         return f'<LogEntry {self.log_type}/{self.action} {self.src_ip}→{self.dst_ip}>'
