@@ -522,55 +522,113 @@ end""" if unscanned_pid else None
         return recommendations
 
     @classmethod
-    def _generate_least_privilege_cli(cls, pid: str, stats: Dict[str, Any]) -> str:
-        """Generate CLI to create specific rules based on observed traffic"""
-        default_cli = f"""config firewall policy
+    def _generate_least_privilege_cli(cls, pid: str, stats: Dict[str, Any], policy_data: Dict[str, Any] = None) -> str:
+        """
+        Generate CLI to RESTRICT a policy based on observed traffic, NOT disable.
+        Creates specific sub-policies and modifies the original to be more restrictive.
+        """
+        if not stats or 'policy_flows' not in stats:
+            # No traffic data - suggest manual review instead of auto-disable
+            return f"""# No traffic data available for Policy {pid}
+# Review manually and restrict to specific:
+# - Source addresses (avoid 'all')
+# - Destination addresses (avoid 'all')
+# - Services (avoid 'ALL')
+config firewall policy
     edit {pid}
-    set status disable
-    set comments "DISABLED BY SECURITY AUDIT (Any/Any Rule)"
+    set comments "PENDING REVIEW - Restrict based on actual traffic"
+    # set srcaddr "specific_object"
+    # set dstaddr "specific_object"
+    # set service "HTTPS" "SSH"
+    next
+end"""
+        
+        flows = stats['policy_flows'].get(str(pid), [])
+        if not flows:
+            return f"""# No recorded traffic flows for Policy {pid}
+# If this policy has no traffic, consider disabling after monitoring period
+config firewall policy
+    edit {pid}
+    set comments "NO TRAFFIC DETECTED - Review for removal"
     next
 end"""
 
-        if not stats or 'policy_flows' not in stats:
-            return default_cli
+        # Analyze flows to determine most common services/IPs
+        services_used = {}
+        src_ips = {}
+        dst_ips = {}
         
-        flows = stats['policy_flows'].get(pid, [])
-        if not flows:
-             return default_cli
-
-        cli = "# Suggested Replacement Rules based on Logs\n"
-        
-        # Create new rules (limit to 10 to avoid huge scripts)
-        count = 0
         for flow in flows:
-            if count >= 10:
-                cli += f"# ... ({len(flows)-10} more flows omitted. Check logs for details.)\n"
-                break
-                
             src, dst, svc, proto = flow
-            # Basic sanitization for src/dst IPs - assuming they are IPs or valid objects
-            # Ideally verify object existence, but IP is safe.
-            cli += f"""config firewall policy
+            services_used[svc] = services_used.get(svc, 0) + 1
+            if src and src != 'all':
+                src_ips[src] = src_ips.get(src, 0) + 1
+            if dst and dst != 'all':
+                dst_ips[dst] = dst_ips.get(dst, 0) + 1
+        
+        # Get top services (limit to 10)
+        top_services = sorted(services_used.items(), key=lambda x: x[1], reverse=True)[:10]
+        top_src = sorted(src_ips.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_dst = sorted(dst_ips.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        # Build service restriction
+        svc_list = ' '.join(f'"{s[0]}"' for s in top_services if s[0] and s[0] != 'ALL')
+        if not svc_list:
+            svc_list = '"HTTPS" "HTTP" "DNS"  # Default safe services'
+        
+        cli = f"""# ═══════════════════════════════════════════════════════════════
+# POLICY {pid} OPTIMIZATION - Based on {len(flows)} observed traffic flows
+# ═══════════════════════════════════════════════════════════════
+
+# OPTION 1: RESTRICT EXISTING POLICY (Recommended)
+# Modify to allow only observed services instead of ALL
+config firewall policy
+    edit {pid}
+    set service {svc_list}
+    set comments "RESTRICTED - Only observed services allowed"
+    set logtraffic all
+    next
+end
+
+"""
+        
+        # Generate sub-policies if there are clear patterns
+        if len(top_services) > 3 and len(top_dst) >= 2:
+            cli += """# OPTION 2: SPLIT INTO SPECIFIC POLICIES
+# Create granular policies per destination/service combination
+"""
+            count = 0
+            for svc_name, svc_count in top_services[:5]:
+                if not svc_name or svc_name == 'ALL':
+                    continue
+                count += 1
+                cli += f"""config firewall policy
     edit 0
-    set name "Rule_{pid}_{count+1}"
-    set srcaddr "{src}"
-    set dstaddr "{dst}"
-    set service "{svc}"
+    set name "Split-P{pid}-{svc_name[:8]}"
+    set srcintf {f'"{policy_data.get("src_intf", "any")}"' if policy_data else '"any"'}
+    set dstintf {f'"{policy_data.get("dst_intf", "any")}"' if policy_data else '"any"'}
+    set srcaddr "all"
+    set dstaddr "all"
+    set service "{svc_name}"
     set action accept
     set schedule "always"
     set logtraffic all
-    set comments "Generated traffic from Policy {pid}"
+    set comments "Split from Policy {pid}"
     next
-end\n"""
-            count += 1
-
-        # Disable original
-        cli += f"""config firewall policy
+end
+"""
+                if count >= 3:
+                    break
+            
+            cli += f"""
+# After creating split policies, disable original:
+config firewall policy
     edit {pid}
     set status disable
-    set comments "REPLACED by specific rules"
+    set comments "REPLACED by specific policies Split-P{pid}-*"
     next
-end"""
+end
+"""
         
         return cli
 
@@ -578,6 +636,8 @@ end"""
     def analyze_policies(cls, policies: List[Dict[str, Any]], stats: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """
         Analyze policy configurations for best practices (Static Analysis)
+        
+        v1.3.0: More precise detection, suggests RESTRICTIONS not disable
         
         Checks for:
         - Any/Any/All Allow rules
@@ -589,20 +649,36 @@ end"""
             pid = p.get('policy_id')
             if not pid: continue
             
-            src = str(p.get('src_addr', '')).lower()
-            dst = str(p.get('dst_addr', '')).lower()
-            svc = str(p.get('service', '')).lower()
+            src = str(p.get('src_addr', '')).strip()
+            dst = str(p.get('dst_addr', '')).strip()
+            svc = str(p.get('service', '')).strip()
             action = str(p.get('action', '')).lower()
             status = str(p.get('status', 'enable')).lower()
             
             if status == 'disable':
                 continue
             
-            # Normalize 'all'/'any' checks
-            # 'all' is the standard FortiOS object for 0.0.0.0/0
-            is_any_src = 'all' in src or 'any' in src
-            is_any_dst = 'all' in dst or 'any' in dst
-            is_any_svc = 'all' in svc or 'any' in svc or 'always' in svc
+            # v1.3.0: More precise detection - only exact 'all' matches
+            # Not triggered by policies that CONTAIN 'all' in a longer name
+            src_lower = src.lower()
+            dst_lower = dst.lower()
+            svc_lower = svc.lower()
+            
+            # Check if src/dst/service is EXACTLY 'all' or 'any' (not part of a longer name)
+            def is_wildcard(value: str) -> bool:
+                """Check if value represents a wildcard (all/any)"""
+                val = value.strip().lower()
+                # Exact match
+                if val in ('all', 'any', '0.0.0.0/0', '0.0.0.0 0.0.0.0'):
+                    return True
+                # Array/list with single 'all' - e.g. "['all']" or '["all"]'
+                if val in ("['all']", '["all"]', "['any']", '["any"]'):
+                    return True
+                return False
+            
+            is_any_src = is_wildcard(src)
+            is_any_dst = is_wildcard(dst)
+            is_any_svc = is_wildcard(svc) or svc_lower == 'always'
             is_accept = 'accept' in action
             
             # Check 1: Any/Any/All Allow (Critical)
@@ -612,27 +688,39 @@ end"""
                     recommendations.append({
                         'category': 'security_audit',
                         'severity': 'critical',
-                        'title': f'Política {pid} Permisiva (Any/Any)',
-                        'description': f'La política explícita {pid} permite tráfico ANY-ANY-ALL con acción ACCEPT. Esto es un riesgo de seguridad mayor.',
-                        'recommendation': 'Deshabilitar esta regla inmediatamente o restringir origen/destino. Las reglas Any/Any solo son para pruebas temporales.',
+                        'title': f'Política {pid} Completamente Abierta (Any/Any/ALL)',
+                        'description': f'La política {pid} permite TODO el tráfico: origen=all, destino=all, servicio=ALL. Esto anula el propósito del firewall.',
+                        'recommendation': 'RESTRINGIR esta política basándose en el tráfico real observado. Ver comando CLI para opciones de restricción.',
                         'related_policy_id': pid,
                         'related_vdom': p.get('vdom'),
-                        'related_vdom': p.get('vdom'),
-                        'cli_remediation': LogAnalyzer._generate_least_privilege_cli(pid, stats)
+                        'cli_remediation': cls._generate_least_privilege_cli(str(pid), stats, p)
                     })
             
             # Check 2: Wide Source with ALL Services (High)
-            # e.g. Allow ALL from WAN to LAN?
-            # We assume src=all dst!=all (Inbound?)
             elif is_any_src and not is_any_dst and is_any_svc and is_accept:
                  recommendations.append({
                         'category': 'security_audit',
                         'severity': 'high',
-                        'title': f'Política {pid} con Origen Abierto y Servicios Totales',
-                        'description': 'Permite tráfico desde "all" hacia objetivos específicos usando CUALQUIER servicio.',
-                        'recommendation': 'Restringir los servicios permitidos. Evitar usar SERVICE ALL en reglas de entrada.',
+                        'title': f'Política {pid} con Origen Abierto (all → específico)',
+                        'description': f'Permite tráfico desde cualquier origen hacia destinos específicos usando TODOS los servicios.',
+                        'recommendation': 'Restringir los servicios permitidos. No usar "ALL" en reglas de entrada.',
                         'related_policy_id': pid,
-                        'related_vdom': p.get('vdom')
+                        'related_vdom': p.get('vdom'),
+                        'cli_remediation': cls._generate_least_privilege_cli(str(pid), stats, p)
+                 })
+            
+            # Check 3: Open destination with specific source (Medium)
+            elif not is_any_src and is_any_dst and is_any_svc and is_accept:
+                 recommendations.append({
+                        'category': 'security_audit',
+                        'severity': 'medium',
+                        'title': f'Política {pid} con Destino Abierto (específico → all)',
+                        'description': f'Permite tráfico hacia cualquier destino. Origen: {src[:50]}...',
+                        'recommendation': 'Considerar restringir destinos y servicios basándose en necesidades reales.',
+                        'related_policy_id': pid,
+                        'related_vdom': p.get('vdom'),
+                        'cli_remediation': cls._generate_least_privilege_cli(str(pid), stats, p)
                  })
 
         return recommendations
+
