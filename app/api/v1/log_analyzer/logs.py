@@ -653,18 +653,38 @@ def api_run_ai_analysis():
     suggest_new_policies = data.get('suggest_new_policies', False)
     threshold = data.get('threshold', 'medium')
     
-    # Get logs for analysis (last 24 hours by default)
+    # Get date range from request, default to last 30 days
     from datetime import datetime, timedelta
-    cutoff = datetime.utcnow() - timedelta(hours=24)
     
-    logs = g.tenant_session.query(LogEntry).filter(
+    days_back = data.get('days_back', 30)  # Default 30 days instead of 24 hours
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+    
+    if start_date:
+        try:
+            cutoff = datetime.fromisoformat(start_date)
+        except:
+            cutoff = datetime.utcnow() - timedelta(days=days_back)
+    else:
+        cutoff = datetime.utcnow() - timedelta(days=days_back)
+    
+    query = g.tenant_session.query(LogEntry).filter(
         LogEntry.timestamp >= cutoff
-    ).limit(10000).all()
+    )
+    
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date)
+            query = query.filter(LogEntry.timestamp <= end_dt)
+        except:
+            pass
+    
+    logs = query.limit(10000).all()
     
     if not logs:
         return jsonify({
             'success': False,
-            'error': 'No logs found for analysis. Import logs first.'
+            'error': f'No logs found for analysis in the last {days_back} days. Import logs first or adjust the date range.'
         }), 400
     
     # Prepare normalized logs for analysis
