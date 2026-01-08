@@ -884,6 +884,14 @@ def api_run_ai_analysis():
                 segmentation=segmentation_context if segmentation_context else None
             )
             
+            # Debug logging
+            current_app.logger.info(f"AI Analysis complete. Keys in result: {ai_result.keys() if isinstance(ai_result, dict) else 'NOT A DICT'}")
+            if isinstance(ai_result, dict):
+                current_app.logger.info(f"new_policies in result: {'new_policies' in ai_result}, count: {len(ai_result.get('new_policies', []))}")
+                current_app.logger.info(f"recommendations in result: {'recommendations' in ai_result}, count: {len(ai_result.get('recommendations', []))}")
+                if ai_result.get('error'):
+                    current_app.logger.warning(f"AI returned error: {ai_result.get('error')}")
+            
             if 'recommendations' in ai_result:
                 for ai_rec in ai_result['recommendations']:
                     rec_severity = ai_rec.get('severity', 'medium')
@@ -901,26 +909,37 @@ def api_run_ai_analysis():
                         })
             
             # v1.3.0 - Handle new policy suggestions from AI
+            new_policies_count = 0
             if 'new_policies' in ai_result and ai_result['new_policies']:
+                current_app.logger.info(f"Processing {len(ai_result['new_policies'])} new policies from AI")
                 for new_pol in ai_result['new_policies']:
+                    service_list = new_pol.get('service', [])
+                    if isinstance(service_list, str):
+                        service_list = [service_list]
                     recommendations.append({
                         'category': 'ai_new_policy',
                         'severity': 'medium',
                         'title': f"[AI NEW] {new_pol.get('name', 'Suggested Policy')}",
                         'description': new_pol.get('description', 'AI-generated policy based on observed traffic'),
-                        'recommendation': f"Create policy: {new_pol.get('src_intf', 'any')} → {new_pol.get('dst_intf', 'any')} [{', '.join(new_pol.get('service', []))}]",
+                        'recommendation': f"Create policy: {new_pol.get('src_intf', 'any')} → {new_pol.get('dst_intf', 'any')} [{', '.join(service_list) if service_list else 'ALL'}]",
                         'cli_remediation': new_pol.get('cli_command', ''),
                         'related_policy_id': None,
                         'affected_interfaces': [new_pol.get('src_intf'), new_pol.get('dst_intf')],
                         'affected_count': 0
                     })
+                    new_policies_count += 1
+            else:
+                current_app.logger.info("No new_policies in AI result")
             
             # v1.3.0 - Store traffic flow analysis if present
             traffic_flows = ai_result.get('traffic_flows', [])
             
         except Exception as e:
+            import traceback
             current_app.logger.warning(f"AI Analysis failed: {e}")
+            current_app.logger.warning(traceback.format_exc())
             traffic_flows = []
+            new_policies_count = 0
     
     # Store recommendations in database  
     device_ids = set(log.device_id for log in logs if log.device_id)
