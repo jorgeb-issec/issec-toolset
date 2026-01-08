@@ -99,16 +99,25 @@ class AIService:
            - Identify most used services per interface pair
            - Detect anomalies in zone-to-zone traffic
         
-        4. **POLICY OPTIMIZATION** (CRITICAL):
-           For overly permissive policies (ANY/ANY), DO NOT just recommend "disable".
-           Instead, generate SPECIFIC replacement policies based on observed traffic.
+        4. **POLICY OPTIMIZATION** (CRITICAL - READ CAREFULLY):
+           ⚠️ NEVER RECOMMEND "DISABLE" OR "DESHABILITAR" A POLICY ⚠️
            
-           Example: If Policy 5 allows "srcintf=LAN, dstintf=WAN, service=ALL" but traffic 
-           only shows HTTPS and DNS, recommend:
-           - Restrict existing policy OR
-           - Create new specific policies for each service
+           For overly permissive policies, you MUST:
+           a) Analyze the ACTUAL traffic in the logs
+           b) Identify the SPECIFIC services being used (e.g., HTTPS, DNS, SSH)
+           c) Identify the SPECIFIC source/destination IPs or subnets
+           d) Generate a RESTRICTIVE replacement policy with:
+              - Specific srcaddr (not 'all') based on observed source IPs
+              - Specific dstaddr (not 'all') based on observed destination IPs  
+              - Specific services (not 'ALL') based on observed traffic
+           
+           Example transformation:
+           BEFORE: srcaddr=all, dstaddr=all, service=ALL
+           AFTER:  srcaddr=192.168.1.0/24, dstaddr=10.0.0.0/24, service=HTTPS,DNS
+           
+           The CLI command should use "set" to MODIFY the existing policy, NOT disable it.
         
-        {"5. **NEW POLICY GENERATION**: Generate new optimized policy configurations based on actual traffic patterns observed. Include full CLI commands." if generate_new_policies else ""}
+        {"5. **NEW POLICY GENERATION**: Generate new optimized policy configurations based on actual traffic patterns observed. Include full CLI commands with specific IPs and services from the logs." if generate_new_policies else ""}
 
         === OUTPUT FORMAT (JSON Only) ===
         {{

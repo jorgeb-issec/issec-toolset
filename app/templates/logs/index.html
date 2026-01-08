@@ -483,8 +483,27 @@
 </div>
 
 <!-- Policy Analysis Modal -->
+<style>
+    /* Fix text wrapping in modal */
+    #policyAnalysisModal .badge {
+        white-space: normal;
+        word-break: break-word;
+        text-align: left;
+        display: inline-block;
+        max-width: 100%;
+    }
+
+    #policyAnalysisModal td {
+        word-break: break-word;
+        max-width: 300px;
+    }
+
+    #policyAnalysisModal .alert {
+        word-break: break-word;
+    }
+</style>
 <div class="modal fade" id="policyAnalysisModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Análisis Detallado de Política</h5>
