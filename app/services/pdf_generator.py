@@ -142,7 +142,8 @@ class PDFReportGenerator:
         elements.append(Spacer(1, 20))
 
         # 3. Ficha Técnica del Equipo (Card Style)
-        site_name = device.site.nombre if device.site else 'N/A'
+        # Note: Equipo does not have direct 'site' relationship, use site_id if available
+        site_name = getattr(device, 'site_name', None) or 'N/A'
         
         # Format VDOMs for display
         vdom_display = 'Todos' if not vdom_list else ', '.join(vdom_list)
