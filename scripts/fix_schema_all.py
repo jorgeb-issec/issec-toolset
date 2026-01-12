@@ -174,7 +174,7 @@ def fix_tenant_db(db_uri, name):
         engine.dispose()
 
 def main():
-    print("=== ISSEC Comprehensive Schema Fix ===")
+    print("=== ISSEC Comprehensive Schema Fix v1.2 ===")
     
     # 1. Fix Central DB
     central_uri = os.environ.get('DATABASE_URL')
