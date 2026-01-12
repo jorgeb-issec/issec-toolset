@@ -52,6 +52,17 @@ def migrate_database(db_uri, db_name):
                     conn.commit()
                 print(f"    ✓ gemini_api_key added")
                 migrations_applied += 1
+
+            # Migration 5: Add topology_data to sites (Central DB)
+            if 'sites' in tables:
+                site_cols = [c['name'] for c in inspector.get_columns('sites')]
+                if 'topology_data' not in site_cols:
+                    print(f"    [+] Adding topology_data column to sites...")
+                    with engine.connect() as conn:
+                        conn.execute(text("ALTER TABLE sites ADD COLUMN topology_data JSONB"))
+                        conn.commit()
+                    print(f"    ✓ sites.topology_data added")
+                    migrations_applied += 1
         
         # Migration 2: Create config_history table if missing
         if 'config_history' not in tables:
