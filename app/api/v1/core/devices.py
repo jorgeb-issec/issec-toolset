@@ -6,7 +6,6 @@ from flask import request, jsonify, g, session, current_app
 from flask_login import login_required
 from app.api.v1 import api_v1_bp
 from app.models.equipo import Equipo
-from app.models.site import Site
 from app.models.vdom import VDOM
 from app.decorators import company_required
 from app.extensions.db import db
@@ -39,9 +38,23 @@ def api_list_devices():
     
     devices = query.all()
     
+    # v1.3.1 - Refactor Site Name resolution
+    # Prefetch site names from Main DB
+    from app.models.site import Site
+    site_names = {}
+    if devices:
+        distinct_site_ids = list(set([d.site_id for d in devices if d.site_id]))
+        if distinct_site_ids:
+            sites = db.session.query(Site).filter(Site.id.in_(distinct_site_ids)).all()
+            site_names = {s.id: s.nombre for s in sites}
+    
     data = []
     for d in devices:
+        # Pass site map to serializer or resolve here
         device_data = serialize_device(d)
+        if d.site_id in site_names:
+            device_data['site_name'] = site_names[d.site_id]
+            
         if with_vdoms:
             vdoms = g.tenant_session.query(VDOM).filter_by(device_id=d.id).all()
             device_data['vdoms'] = [{'id': str(v.id), 'name': v.name} for v in vdoms]
@@ -69,6 +82,14 @@ def api_get_device(device_id):
         return jsonify({'success': False, 'error': 'Device not found'}), 404
     
     data = serialize_device(device)
+    
+    # Enrich site name individually
+    from app.models.site import Site
+    if device.site_id:
+        site = db.session.query(Site).filter(Site.id == device.site_id).first()
+        if site:
+            data['site_name'] = site.nombre
+            
     data['config_data'] = device.config_data
     
     # Include VDOMs
@@ -368,7 +389,10 @@ def api_list_sites():
     Returns:
         JSON with sites array
     """
-    sites = g.tenant_session.query(Site).all()
+
+    # Fetch from Main DB
+    from app.models.site import Site
+    sites = db.session.query(Site).all()
     
     data = []
     for s in sites:
@@ -376,8 +400,9 @@ def api_list_sites():
             'id': str(s.id),
             'nombre': s.nombre
         }
-        # Count devices per site
-        device_count = g.tenant_session.query(Equipo).filter_by(site_id=s.id).count()
+        # Count devices per site (Tenant DB)
+        # Equipment has site_id as plain UUID column now
+        device_count = g.tenant_session.query(Equipo).filter(Equipo.site_id == s.id).count()
         site_data['device_count'] = device_count
         data.append(site_data)
     
@@ -397,7 +422,7 @@ def serialize_device(device):
         'hostname': device.hostname,
         'serial': device.serial,
         'site_id': str(device.site_id) if device.site_id else None,
-        'site_name': device.site.nombre if device.site else None,
+        'site_name': None, # Populated by caller via Main DB lookup
         'ha_enabled': device.ha_habilitado,
         'has_config': device.config_data is not None
     }

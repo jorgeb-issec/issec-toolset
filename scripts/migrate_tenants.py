@@ -76,6 +76,16 @@ def migrate_all_tenants():
                         print("   Adding vdom_id to policy_history...")
                         conn.execute(text("ALTER TABLE policy_history ADD COLUMN IF NOT EXISTS vdom_id UUID"))
                         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_policy_history_vdom_id ON policy_history(vdom_id)"))
+
+                    # v1.3.1 - Add topology_data to sites
+                    # Only if 'sites' table is in tenant DB (user feedback implies it is)
+                    # Use simpler check or just try
+                    try:
+                        conn.execute(text("SELECT 1 FROM sites LIMIT 1"))
+                        print("   Adding topology_data to sites...")
+                        conn.execute(text("ALTER TABLE sites ADD COLUMN IF NOT EXISTS topology_data JSONB"))
+                    except Exception as e:
+                        print(f"   Note: 'sites' table not found or error: {e}")
                     
                     conn.commit()
                     print("   ✅ Migration complete!")

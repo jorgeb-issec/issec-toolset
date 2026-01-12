@@ -12,8 +12,13 @@ site_bp = Blueprint('site', __name__)
 @login_required
 @company_required
 def list_sites():
-    # Sites are per-tenant DB
-    sites = g.tenant_session.query(Site).all()
+    # Sites are now Global/Main DB
+    sites = db.session.query(Site).all()
+    # If we need device counts, we must query tenant DB for each
+    for s in sites:
+         # Annotate on the fly (careful with N+1 queries, but sites are few)
+         s.device_count = g.tenant_session.query(Equipo).filter(Equipo.site_id == s.id).count()
+
     return render_template('admin/sites/list.html', sites=sites)
 
 @site_bp.route('/admin/sites/add', methods=['POST'])
@@ -27,14 +32,14 @@ def add_site():
         flash("El nombre del sitio es obligatorio", "warning")
         return redirect(url_for('site.list_sites'))
         
-    # Check duplicate
-    if g.tenant_session.query(Site).filter_by(nombre=name).first():
+    # Check duplicate in Main DB
+    if db.session.query(Site).filter_by(nombre=name).first():
         flash("Ya existe un sitio con ese nombre", "warning")
         return redirect(url_for('site.list_sites'))
         
     new_site = Site(nombre=name, direccion=address)
-    g.tenant_session.add(new_site)
-    g.tenant_session.commit()
+    db.session.add(new_site)
+    db.session.commit()
     
     flash("Sitio creado correctamente", "success")
     return redirect(url_for('site.list_sites'))
@@ -44,17 +49,21 @@ def add_site():
 @company_required
 def confirm_delete_site(site_id):
     """Show confirmation page with migration options if site has equipos"""
-    site = g.tenant_session.query(Site).get(site_id)
+    # Main DB
+    site = db.session.query(Site).get(site_id)
     if not site:
         flash("Sitio no encontrado", "danger")
         return redirect(url_for('site.list_sites'))
     
-    # Get other sites for migration option
-    other_sites = g.tenant_session.query(Site).filter(Site.id != site_id).all()
+    # Tenant DB: Check for attached equipment
+    equipos = g.tenant_session.query(Equipo).filter(Equipo.site_id == site_id).all()
+    
+    # Get other sites for migration option (Main DB)
+    other_sites = db.session.query(Site).filter(Site.id != site_id).all()
     
     return render_template('admin/sites/confirm_delete.html', 
                            site=site, 
-                           equipos=site.equipos,
+                           equipos=equipos,
                            other_sites=other_sites)
 
 @site_bp.route('/admin/sites/delete/<uuid:site_id>', methods=['POST'])
@@ -62,7 +71,8 @@ def confirm_delete_site(site_id):
 @company_required
 def delete_site(site_id):
     """Delete site, optionally migrating equipos first"""
-    site = g.tenant_session.query(Site).get(site_id)
+    # Main DB
+    site = db.session.query(Site).get(site_id)
     if not site:
         flash("Sitio no encontrado", "danger")
         return redirect(url_for('site.list_sites'))
@@ -70,21 +80,25 @@ def delete_site(site_id):
     action = request.form.get('action')
     target_site_id = request.form.get('target_site_id')
     
-    if site.equipos:
+    # Tenant DB: Check equipment
+    equipos = g.tenant_session.query(Equipo).filter(Equipo.site_id == site_id).all()
+    
+    if equipos:
         if action == 'migrate' and target_site_id:
             # Migrate all equipos to target site
-            target_site = g.tenant_session.query(Site).get(uuid.UUID(target_site_id))
+            # Validate target site exists in Main DB
+            target_site = db.session.query(Site).get(uuid.UUID(target_site_id))
             if target_site:
-                for equipo in site.equipos:
+                for equipo in equipos:
                     equipo.site_id = target_site.id
                 g.tenant_session.commit()
-                flash(f"Se migraron {len(site.equipos)} equipos a {target_site.nombre}", "info")
+                flash(f"Se migraron {len(equipos)} equipos a {target_site.nombre}", "info")
             else:
                 flash("Sitio destino no encontrado", "danger")
                 return redirect(url_for('site.confirm_delete_site', site_id=site_id))
         elif action == 'delete_all':
             # Delete all equipos (cascade will delete policies)
-            for equipo in site.equipos:
+            for equipo in equipos:
                 g.tenant_session.delete(equipo)
             g.tenant_session.commit()
             flash(f"Se eliminaron todos los equipos del sitio", "warning")
@@ -92,9 +106,9 @@ def delete_site(site_id):
             flash("Debe elegir migrar o eliminar los equipos", "warning")
             return redirect(url_for('site.confirm_delete_site', site_id=site_id))
     
-    # Now delete the site
-    g.tenant_session.delete(site)
-    g.tenant_session.commit()
+    # Now delete the site from Main DB
+    db.session.delete(site)
+    db.session.commit()
     flash(f"Sitio '{site.nombre}' eliminado correctamente", "success")
     
     return redirect(url_for('site.list_sites'))
@@ -104,7 +118,8 @@ def delete_site(site_id):
 @company_required
 def edit_site(site_id):
     """Edit site name and address"""
-    site = g.tenant_session.query(Site).get(site_id)
+    # Main DB
+    site = db.session.query(Site).get(site_id)
     if not site:
         flash("Sitio no encontrado", "danger")
         return redirect(url_for('site.list_sites'))
@@ -116,15 +131,15 @@ def edit_site(site_id):
         flash("El nombre es obligatorio", "warning")
         return redirect(url_for('site.list_sites'))
     
-    # Check for duplicate name
-    existing = g.tenant_session.query(Site).filter(Site.nombre == nombre, Site.id != site_id).first()
+    # Check for duplicate name in Main DB
+    existing = db.session.query(Site).filter(Site.nombre == nombre, Site.id != site_id).first()
     if existing:
         flash("Ya existe otro sitio con ese nombre", "warning")
         return redirect(url_for('site.list_sites'))
     
     site.nombre = nombre
     site.direccion = direccion
-    g.tenant_session.commit()
+    db.session.commit()
     
     flash("Sitio actualizado correctamente", "success")
     return redirect(url_for('site.list_sites'))

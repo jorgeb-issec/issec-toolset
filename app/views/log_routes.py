@@ -14,12 +14,16 @@ def index():
     from flask import current_app
     from flask_login import current_user
     
-    # Get devices for filter
+    from app.models.site import Site
+    
+    # Get devices and sites for filter
     devices = g.tenant_session.query(Equipo).all()
+    from app.extensions.db import db
+    sites = db.session.query(Site).all()
     
     # Generate API Token for frontend JS
     token = current_user.encode_auth_token(current_app.config['SECRET_KEY'])
     if isinstance(token, bytes):
         token = token.decode('utf-8')
         
-    return render_template('logs/index.html', devices=devices, api_token=token)
+    return render_template('logs/index.html', devices=devices, sites=sites, api_token=token)

@@ -99,24 +99,35 @@ class AIService:
            - Identify most used services per interface pair
            - Detect anomalies in zone-to-zone traffic
         
-        4. **POLICY OPTIMIZATION** (CRITICAL - READ CAREFULLY):
+        4. **ZERO TRUST ENFORCEMENT & POLICY OPTIMIZATION** (CRITICAL):
            
-           For overly permissive policies, you MUST:
-           a) Analyze the ACTUAL traffic in the logs
-           b) Identify the SPECIFIC services being used (e.g., HTTPS, DNS, SSH)
-           c) Identify the SPECIFIC source/destination IPs or subnets
-           d) Generate a RESTRICTIVE replacement policy with:
-              - Specific srcaddr (not 'all') based on observed source IPs
-              - Specific dstaddr (not 'all') based on observed destination IPs  
-              - Specific services (not 'ALL') based on observed traffic
+           Adopt a "Zero Trust" philosophy: "Never Trust, Always Verify".
+           Everything not explicitly allowed should be denied.
            
-           Example transformation:
-           BEFORE: srcaddr=all, dstaddr=all, service=ALL
-           AFTER:  srcaddr=192.168.1.0/24, dstaddr=10.0.0.0/24, service=HTTPS,DNS
+           For overly permissive policies (Any/Any, or broad ranges), you MUST:
+           a) Analyze the ACTUAL traffic flows in the logs (Src -> Dst : Service).
+           b) Identify the valid business patterns vs noise.
+           c) Generate a **STRICT ALLOW-LIST** policy that permits ONLY the observed necessary traffic.
+           d) Suggest REMOVING or DISABLING the original permissive policy after the new specific one is verified.
            
-           The CLI command should use "set" to MODIFY the existing policy, NOT disable it.
+           **CRITICAL VIOLATIONS TO FLAG:**
+           - Lateral movement (Internal -> Internal) using admin protocols (RDP, SSH, WinRM) without specific justification.
+           - Prod/DMZ access from non-secure zones.
+           - Clear text protocols (Telnet, FTP, HTTP) crossing zone boundaries.
+
+           Example of specific remediation (Whitelist):
+           "The traffic shows 95% HTTPS to 10.0.0.5. Restrict Policy 10 completely."
+           CLI:
+           config firewall policy
+             edit <ID>
+             set srcaddr "Specific_Host"
+             set dstaddr "Specific_Server"
+             set service "HTTPS"
+             set action accept
+             next
+           end
         
-        {"5. **NEW POLICY GENERATION**: Generate new optimized policy configurations based on actual traffic patterns observed. Include full CLI commands with specific IPs and services from the logs." if generate_new_policies else ""}
+        {"5. **NEW POLICY GENERATION**: Generate granular Zero Trust policies for observed traffic flows. Create multiple specific policies rather than one broad one if multiple distinct flows exist." if generate_new_policies else ""}
 
         === OUTPUT FORMAT (JSON Only) ===
         {{

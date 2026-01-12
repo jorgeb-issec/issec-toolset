@@ -17,6 +17,7 @@ import uuid
 import os
 
 
+
 @api_v1_bp.route('/policies', methods=['GET'])
 @login_required
 @company_required
@@ -84,8 +85,8 @@ def api_list_policies():
     f_ignore_nat = request.args.get('ignore_nat') == 'true'
     f_show_nat = request.args.get('show_nat') == 'true'
 
-    # Build query
-    query = g.tenant_session.query(Policy).join(Equipo).join(Site)
+    # Build query (removed .join(Site) as Site is in Main DB)
+    query = g.tenant_session.query(Policy).join(Equipo)
 
     if f_device:
         query = query.filter(Policy.device_id == f_device)
@@ -190,10 +191,20 @@ def api_list_policies():
         total = query.count()
         items = query.offset((page - 1) * per_page).limit(per_page).all()
         
+        # Prefetch Site Names from Main DB for efficiency
+        from app.models.site import Site
+        # Get all distinct site_ids from fetched policies' equipment
+        site_ids = list(set([p.equipo.site_id for p in items if p.equipo and p.equipo.site_id]))
+        site_map = {}
+        if site_ids:
+             # Use main db session
+             sites = db.session.query(Site).filter(Site.id.in_(site_ids)).all()
+             site_map = {s.id: s.nombre for s in sites}
+
         # Serialize policies
         policies_data = []
         for p in items:
-            policies_data.append(serialize_policy(p))
+            policies_data.append(serialize_policy(p, site_map))
 
         return jsonify({
             'success': True,
@@ -237,7 +248,16 @@ def api_get_policy(policy_uuid):
     if not policy:
         return jsonify({'success': False, 'error': 'Policy not found'}), 404
     
-    data = serialize_policy(policy)
+    from app.models.site import Site
+    
+    # Fetch site name for this single policy
+    site_map = {}
+    if policy.equipo and policy.equipo.site_id:
+        s = db.session.query(Site).filter(Site.id == policy.equipo.site_id).first()
+        if s:
+            site_map[policy.equipo.site_id] = s.nombre
+
+    data = serialize_policy(policy, site_map)
     data['raw_data'] = policy.raw_data
     
     return jsonify({
@@ -607,8 +627,15 @@ def api_list_vdoms():
     })
 
 
-def serialize_policy(policy):
+
+def serialize_policy(policy, site_map=None):
     """Helper to serialize a Policy object to dict"""
+    
+    # Resolve Site Name using map if provided, or fallback (which wont work if lazy loading across DBs)
+    site_name = None
+    if site_map and policy.equipo and policy.equipo.site_id in site_map:
+        site_name = site_map[policy.equipo.site_id]
+    
     return {
         'uuid': str(policy.uuid),
         'policy_id': policy.policy_id,
@@ -625,5 +652,5 @@ def serialize_policy(policy):
         'bytes_int': policy.bytes_int,
         'hit_count': policy.hit_count,
         'device_name': policy.equipo.nombre if policy.equipo else None,
-        'site_name': policy.equipo.site.nombre if policy.equipo and policy.equipo.site else None
+        'site_name': site_name
     }

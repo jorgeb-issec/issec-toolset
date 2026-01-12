@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.extensions.db import db
 
 class Site(db.Model):
@@ -9,8 +9,13 @@ class Site(db.Model):
     nombre = db.Column(db.String(100), nullable=False, unique=True)
     direccion = db.Column(db.String(200), nullable=True)
     
-    # Relación: Un Sitio tiene muchos Equipos
-    equipos = db.relationship('Equipo', backref='site', lazy=True)
+    
+    # Relationship removed: Site and Equipo are in DIFFERENT databases (Main vs Tenant).
+    # Linkage is logical via site_id UUID only.
+
+    
+    # Store topology layout/config
+    topology_data = db.Column(JSONB, nullable=True)
 
     def __repr__(self):
         return f"<Site {self.nombre}>"

@@ -7,8 +7,9 @@ class Equipo(db.Model):
 
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
-    # FK a la tabla Sites
-    site_id = db.Column(UUID(as_uuid=True), db.ForeignKey('sites.id'), nullable=False)
+    
+    # FK a la tabla Sites (Ref Only - No strict SQL FK in Tenant DB)
+    site_id = db.Column(UUID(as_uuid=True), index=True, nullable=False)
     
     nombre = db.Column(db.String(100), nullable=False)
     serial = db.Column(db.String(100), nullable=False, unique=True)

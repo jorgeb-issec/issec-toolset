@@ -28,6 +28,7 @@ class Policy(db.Model):
     service = db.Column(db.Text)
     
     action = db.Column(db.String(50), index=True)
+    status = db.Column(db.String(20), default='enable') # Field defined now
     nat = db.Column(db.String(50))
     
     # --- Datos Numéricos (BigInteger para soportar TBs de tráfico) ---
@@ -39,6 +40,15 @@ class Policy(db.Model):
 
     # --- Relationships (v1.3.0) ---
     vdom_ref = db.relationship('VDOM', backref=db.backref('policies', lazy='dynamic'))
+
+    # The mapping relationships are defined in policy_mappings.py as backrefs on the Policy object:
+    # - interface_mappings
+    # - address_mappings
+    # - service_mappings
+    # No need to redefine them here if backrefs are set, but checking logic.
+    # policy_mappings.py uses:
+    # policy = db.relationship('Policy', backref=db.backref('interface_mappings', ...))
+    # So 'interface_mappings' is available on Policy instances.
     
     # --- Propiedades Virtuales (Para visualización) ---
     @property

@@ -2,10 +2,11 @@
 
 {% block content %}
 <div class="container-fluid">
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h1 class="h3 mb-0 text-gray-800">Log Analyzer</h1>
-            <p class="text-muted small">Análisis de seguridad y detección de amenazas con AI</p>
+            <h1 class="h3 mb-0 text-gray-800">IS Analyzer</h1>
+            <p class="text-muted small">Plataforma de análisis de seguridad, topología y cumplimiento Zero Trust</p>
         </div>
         <div class="d-flex gap-2">
             <div class="dropdown">
@@ -77,15 +78,55 @@
         </div>
     </div>
 
+    <!-- Global Filters -->
+    <div class="card mb-4 border-0 shadow-sm bg-light">
+        <div class="card-body py-2">
+            <form id="global-filter-form" class="row g-2 align-items-center justify-content-between">
+                <div class="col-auto d-flex align-items-center">
+                    <label class="small fw-bold text-muted me-2"><i class="bi bi-hdd-network"></i> Dispositivo:</label>
+                    <select class="form-select form-select-sm" name="device_id" id="global-device-select"
+                        style="min-width: 200px;" onchange="currentPage=1; loadLogs();">
+                        <option value="">Todos los Equipos</option>
+                        {% for d in devices %}
+                        <option value="{{ d.id }}">{{ d.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto d-flex align-items-center">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control border-start-0" name="search" id="global-search-input"
+                            placeholder="Buscar IP, usuario, política..."
+                            onkeyup="if(event.key === 'Enter') { currentPage=1; loadLogs(); }">
+                        <button type="button" class="btn btn-primary"
+                            onclick="currentPage=1; loadLogs()">Filtrar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Main Content Tabs -->
     <ul class="nav nav-tabs mb-3" id="logTabs" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="explorer-tab" data-bs-toggle="tab" data-bs-target="#explorer"
-                type="button">Explorer</button>
+            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview"
+                type="button">Overview</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis" type="button">
-                AI Analysis <span class="badge bg-primary ms-1">New</span>
+            <button class="nav-link" id="static-audit-tab" data-bs-toggle="tab" data-bs-target="#static-audit"
+                type="button">Static Audit</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="dynamic-audit-tab" data-bs-toggle="tab" data-bs-target="#dynamic-audit"
+                type="button">Dynamic Audit</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="explorer-tab" data-bs-toggle="tab" data-bs-target="#explorer" type="button">Log
+                Explorer</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="topology-tab" data-bs-toggle="tab" data-bs-target="#topology" type="button">
+                Topology
             </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -96,28 +137,128 @@
     </ul>
 
     <div class="tab-content" id="logTabsContent">
-        <!-- Explorer Tab -->
-        <div class="tab-pane fade show active" id="explorer" role="tabpanel">
-            <div class="card shadow-sm">
-                <div class="card-header bg-white py-3">
-                    <form id="filter-form" class="row g-3 align-items-center">
-                        <div class="col-auto">
-                            <select class="form-select form-select-sm" name="device_id">
-                                <option value="">Todos los Equipos</option>
-                                {% for d in devices %}
-                                <option value="{{ d.id }}">{{ d.nombre }}</option>
-                                {% endfor %}
-                            </select>
+        <!-- Overview Tab -->
+        <div class="tab-pane fade show active" id="overview" role="tabpanel">
+            <!-- ... existing overview ... -->
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="alert alert-info">
+                        <h4 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Bienvenido a IS Analyzer</h4>
+                        <p>Seleccione una pestaña para comenzar el análisis. Use el selector de
+                            <strong>Dispositivo</strong> arriba para filtrar el contexto.
+                        </p>
+                        <hr>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-primary"
+                                onclick="document.getElementById('static-audit-tab').click()">
+                                <i class="bi bi-search me-2"></i>Auditoría Estática
+                            </button>
+                            <button class="btn btn-outline-success"
+                                onclick="document.getElementById('dynamic-audit-tab').click()">
+                                <i class="bi bi-activity me-2"></i>Auditoría Dinámica
+                            </button>
+                            <button class="btn btn-outline-dark"
+                                onclick="document.getElementById('explorer-tab').click()">
+                                <i class="bi bi-list-columns me-2"></i>Log Explorer
+                            </button>
                         </div>
-                        <div class="col-auto">
-                            <input type="text" class="form-control form-control-sm" name="search"
-                                placeholder="Buscar IP, usuario...">
-                        </div>
-                        <div class="col-auto">
-                            <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
+            </div>
+            <!-- Stats Cards will be here -->
+            <div class="row g-3 mb-4 mt-2">
+                <div class="col-md-3">
+                    <div class="card shadow-sm border-start border-primary border-4 h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted text-uppercase small fw-bold">Total Logs</h6>
+                            <h3 class="mb-0 display-6 fw-bold" id="stats-total-logs">-</h3>
+                            <small class="text-muted"><i class="bi bi-clock"></i> Últimos 30 días</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm border-start border-danger border-4 h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted text-uppercase small fw-bold">Amenazas / Bloqueos</h6>
+                            <h3 class="mb-0 display-6 fw-bold text-danger" id="stats-threats">-</h3>
+                            <small class="text-muted" id="stats-threats-label">Denied/Blocked</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm border-start border-warning border-4 h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted text-uppercase small fw-bold">Recomendaciones</h6>
+                            <h3 class="mb-0 display-6 fw-bold text-warning" id="stats-recommendations">-</h3>
+                            <small class="text-muted">Pendientes</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm border-start border-info border-4 h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted text-uppercase small fw-bold">Volumen Datos</h6>
+                            <h3 class="mb-0 display-6 fw-bold text-info" id="stats-volume">-</h3>
+                            <small class="text-muted">Procesados</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Static Audit Tab -->
+        <div class="tab-pane fade" id="static-audit" role="tabpanel">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                    <h5 class="mb-0 text-primary"><i class="bi bi-shield-check me-2"></i>Auditoría Estática
+                        (Configuración)</h5>
+                    <button class="btn btn-sm btn-outline-primary" onclick="loadStaticAudit()">
+                        <i class="bi bi-arrow-clockwise"></i> Ejecutar Análisis
+                    </button>
+                </div>
+                <div class="card-body" id="static-audit-container">
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-search fs-1 mb-3 d-block"></i>
+                        <p>Haga clic en "Ejecutar Análisis" para buscar vulnerabilidades en la configuración.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dynamic Audit Tab -->
+        <div class="tab-pane fade" id="dynamic-audit" role="tabpanel">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                    <h5 class="mb-0 text-success"><i class="bi bi-activity me-2"></i>Auditoría Dinámica (Log-Based)</h5>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="bi bi-download"></i> Exportar
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="exportRecommendations('all', 'csv')">CSV</a>
+                            </li>
+                            <li><a class="dropdown-item" href="#" onclick="exportRecommendations('all', 'pdf')">PDF</a>
+                            </li>
+                        </ul>
+                        <button class="btn btn-outline-success" onclick="runDynamicAudit()">
+                            <i class="bi bi-play-fill"></i> Ejecutar Análisis
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body" id="dynamic-audit-container">
+                    <!-- Results will load here -->
+                    <div class="text-center py-5 text-muted">
+                        <div class="spinner-border text-success mb-3 d-none" role="status" id="dynamic-spinner"></div>
+                        <p>Análisis de Zombies, Least Privilege y Noisy Drops.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Explorer Tab (Formerly Active) -->
+        <div class="tab-pane fade" id="explorer" role="tabpanel">
+            <div class="card shadow-sm">
+                <!-- Removed local search header -->
                 <div class="card-footer bg-white d-flex justify-content-between align-items-center border-bottom">
                     <div class="d-flex align-items-center">
                         <span class="text-muted small me-2" id="pagination-info-top">Mostrando 0-0 de 0</span>
@@ -186,174 +327,78 @@
             </div>
         </div>
 
-        <!-- Analysis Tab -->
-        <div class="tab-pane fade" id="analysis" role="tabpanel">
-            <div class="row">
-                <div class="col-md-8">
-                    <div class="card shadow-sm h-100">
-                        <div class="card-header bg-white">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <h5 class="mb-0"><i class="bi bi-stars text-warning me-2"></i>Recomendaciones de
-                                    Seguridad (AI)</h5>
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-                                        <i class="bi bi-download"></i> Exportar
-                                    </button>
-                                    <ul class="dropdown-menu">
-                                        <li><a class="dropdown-item" href="#"
-                                                onclick="exportRecommendations('all', 'csv')"><i
-                                                    class="bi bi-file-earmark-spreadsheet me-2"></i>Todo (CSV)</a></li>
-                                        <li><a class="dropdown-item" href="#"
-                                                onclick="exportRecommendations('selected', 'csv')"><i
-                                                    class="bi bi-file-earmark-spreadsheet me-2"></i>Selección (CSV)</a>
-                                        </li>
-                                        <li>
-                                            <hr class="dropdown-divider">
-                                        </li>
-                                        <li><a class="dropdown-item" href="#"
-                                                onclick="exportRecommendations('all', 'pdf')"><i
-                                                    class="bi bi-file-earmark-pdf me-2"></i>Todo (PDF)</a></li>
-                                        <li><a class="dropdown-item" href="#"
-                                                onclick="exportRecommendations('selected', 'pdf')"><i
-                                                    class="bi bi-file-earmark-pdf me-2"></i>Selección (PDF)</a></li>
-                                    </ul>
-                                    <button class="btn btn-outline-primary" onclick="loadRecommendations()">
-                                        <i class="bi bi-arrow-clockwise"></i> Actualizar
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center border-top pt-2">
-                                <div class="d-flex align-items-center">
-                                    <select class="form-select form-select-sm rec-per-page-select" style="width: 70px;"
-                                        onchange="changeRecPerPage(this.value)">
-                                        <option value="8">8</option>
-                                        <option value="16">16</option>
-                                        <option value="32">32</option>
-                                        <option value="64">64</option>
-                                        <option value="128">128</option>
-                                        <option value="256">256</option>
-                                        <option value="512">512</option>
-                                    </select>
-                                    <span class="ms-2 small text-muted">items</span>
-                                </div>
-                                <nav>
-                                    <ul class="pagination pagination-sm mb-0 rec-pagination-controls"></ul>
-                                </nav>
-                            </div>
-                        </div>
-                        <div class="card-body" id="recommendations-container">
-                            <div class="text-center py-5 text-muted">
+
+
+        <!-- Topology Tab -->
+        <div class="tab-pane fade" id="topology" role="tabpanel">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                    <h5 class="mb-0 text-primary"><i class="bi bi-diagram-3-fill me-2"></i>Topología de Red</h5>
+                    <div class="d-flex gap-2">
+                        <select class="form-select form-select-sm" id="topology-site-filter" style="width: 200px;"
+                            onchange="loadTopology()">
+                            <option value="">Todos los Sitios</option>
+                            {% for s in sites %}
+                            <option value="{{ s.id }}">{{ s.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                        <select class="form-select form-select-sm" id="topology-mode" style="width: 150px;">
+                            <option value="dynamic">Modo: Dinámico</option>
+                            <option value="saved">Modo: Guardado</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-success" onclick="saveTopology()">
+                            <i class="bi bi-save"></i> Guardar
+                        </button>
+                        <button class="btn btn-sm btn-outline-warning" onclick="analyzeTopology()">
+                            <i class="bi bi-magic"></i> Analizar
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="toggleTopologyView()"
+                            title="Cambiar a vista Texto">
+                            <i class="bi bi-file-text"></i> Texto
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="loadTopology()">
+                            <i class="bi bi-arrow-clockwise"></i> Actualizar
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div id="topology-network"
+                        style="height: 600px; width: 100%; position: relative; background-color: #f8f9fa; border-bottom: 1px solid #e9ecef;">
+                        <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                            <div class="text-center">
                                 <div class="spinner-border text-primary mb-3" role="status"></div>
-                                <p>Analizando patrones de seguridad...</p>
+                                <p>Cargando visualización de infraestructura...</p>
                             </div>
-                        </div>
-                        <div
-                            class="card-footer bg-white border-top-0 d-flex justify-content-between align-items-center">
-                            <div class="d-flex align-items-center">
-                                <select class="form-select form-select-sm rec-per-page-select" style="width: 70px;"
-                                    onchange="changeRecPerPage(this.value)">
-                                    <option value="8" selected>8</option>
-                                    <option value="16">16</option>
-                                    <option value="32">32</option>
-                                    <option value="64">64</option>
-                                    <option value="128">128</option>
-                                    <option value="256">256</option>
-                                    <option value="512">512</option>
-                                </select>
-                                <span class="ms-2 small text-muted">items</span>
-                            </div>
-                            <nav>
-                                <ul class="pagination pagination-sm mb-0 rec-pagination-controls"></ul>
-                            </nav>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="card shadow-sm mb-3">
-                        <div class="card-header bg-white">
-                            <h6 class="mb-0"><i class="bi bi-sliders me-2"></i>Parámetros de Análisis AI</h6>
+                <div class="card-footer bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex gap-3 small text-muted">
+                            <span class="d-flex align-items-center"><i class="bi bi-circle-fill text-danger me-1"></i>
+                                Site</span>
+                            <span class="d-flex align-items-center"><i
+                                    class="bi bi-hdd-network-fill text-primary me-1"></i>
+                                Device</span>
+                            <span class="d-flex align-items-center"><i class="bi bi-hexagon-fill text-success me-1"></i>
+                                VDOM</span>
+                            <span class="d-flex align-items-center"><i class="bi bi-link text-secondary me-1"></i>
+                                Interface</span>
                         </div>
-                        <div class="card-body">
-                            <form id="ai-params-form">
-                                <!-- v1.3.0 - Segmentation Filters -->
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold"><i
-                                            class="bi bi-filter me-1"></i>Segmentación</label>
-                                    <select class="form-select form-select-sm mb-2" id="ai-device"
-                                        onchange="loadVdomsForDevice()">
-                                        <option value="">Todos los Equipos</option>
-                                        {% for d in devices %}
-                                        <option value="{{ d.id }}">{{ d.nombre }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <select class="form-select form-select-sm mb-2" id="ai-vdom"
-                                        onchange="loadInterfacesForVdom()">
-                                        <option value="">Todos los VDOMs</option>
-                                    </select>
-                                    <div class="row g-1">
-                                        <div class="col-6">
-                                            <select class="form-select form-select-sm" id="ai-src-intf">
-                                                <option value="">Src Interface</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-6">
-                                            <select class="form-select form-select-sm" id="ai-dst-intf">
-                                                <option value="">Dst Interface</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <hr class="my-2">
-
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold">Enfoques de Análisis</label>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="ai-denied" checked>
-                                        <label class="form-check-label small" for="ai-denied">
-                                            Conexiones denegadas/bloqueadas
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="ai-high-volume" checked>
-                                        <label class="form-check-label small" for="ai-high-volume">
-                                            Sesiones de alto volumen
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="ai-geo" checked>
-                                        <label class="form-check-label small" for="ai-geo">
-                                            Análisis por geolocalización
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="ai-policy-opt">
-                                        <label class="form-check-label small" for="ai-policy-opt">
-                                            Optimización de políticas
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="ai-new-policies" checked>
-                                        <label class="form-check-label small" for="ai-new-policies">
-                                            <i class="bi bi-plus-circle text-success me-1"></i>Sugerir nuevas políticas
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label small fw-bold">Umbral de alertas</label>
-                                    <select class="form-select form-select-sm" id="ai-threshold">
-                                        <option value="low">Bajo (más alertas)</option>
-                                        <option value="medium" selected>Medio</option>
-                                        <option value="high">Alto (solo críticas)</option>
-                                    </select>
-                                </div>
-                                <button type="button" class="btn btn-primary btn-sm w-100" onclick="runAIAnalysis()">
-                                    <i class="bi bi-play-fill me-1"></i>Ejecutar Análisis AI
-                                </button>
-                            </form>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#topologyDebug" aria-expanded="false" aria-controls="topologyDebug">
+                                <i class="bi bi-code-slash me-1"></i> Debug JSON
+                            </button>
                         </div>
                     </div>
 
+                    <div class="collapse mt-3" id="topologyDebug">
+                        <div class="card card-body bg-dark text-light font-monospace small"
+                            style="max-height: 300px; overflow-y: auto;">
+                            <pre id="topology-json-output" class="m-0 text-success">Esperando datos...</pre>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -576,7 +621,10 @@
         loadRecommendations();
         // loadImportHistory(); // TODO: Implement import history
 
-        document.getElementById('filter-form').addEventListener('submit', (e) => {
+        // Remove old filter-form listener, use global inputs onchange/onclick
+        // Listeners for global inputs are added inline or can be added here
+
+        document.getElementById('global-filter-form').addEventListener('submit', (e) => {
             e.preventDefault();
             currentPage = 1;
             loadLogs();
@@ -594,7 +642,7 @@
 
             try {
                 const result = await apiCall('/logs/import', 'POST', formData);
-                alert('Logs importados correctamente. Sesión: ' + result.import_session_id + '\\nLogs: ' + result.log_count);
+                alert('Logs importados correctamente. Sesión: ' + result.import_session_id + '\nLogs: ' + result.log_count);
                 location.reload();
             } catch (error) {
                 console.error(error);
@@ -612,10 +660,9 @@
         const tbody = document.getElementById('logs-table-body');
 
         try {
-            // Get Filters
-            const formData = new FormData(document.getElementById('filter-form'));
-            const search = formData.get('search') || '';
-            const deviceId = formData.get('device_id') || '';
+            // Get Filters GLOBALLY
+            const deviceId = document.getElementById('global-device-select').value;
+            const search = document.getElementById('global-search-input').value;
 
             const url = `/logs?page=${currentPage}&per_page=${currentPerPage}&q=${encodeURIComponent(search)}&device_id=${deviceId}`;
             const data = await apiCall(url);
@@ -830,6 +877,36 @@
     }
 
     // v1.3.0 - Dynamic dropdown loaders for segmentation
+    function loadDevicesForSite() {
+        const siteId = document.getElementById('ai-site').value;
+        const deviceSelect = document.getElementById('ai-device');
+        const options = deviceSelect.querySelectorAll('option');
+
+        let firstVisible = '';
+
+        options.forEach(opt => {
+            if (!opt.value) return; // Skip "All" option
+
+            const deviceSiteId = opt.getAttribute('data-site-id');
+            if (!siteId || deviceSiteId === siteId) {
+                opt.style.display = '';
+                if (!firstVisible) firstVisible = opt.value;
+            } else {
+                opt.style.display = 'none';
+            }
+        });
+
+        // Reset selection to "All" or first valid option if current is hidden
+        const currentOpt = deviceSelect.options[deviceSelect.selectedIndex];
+        if (currentOpt.style.display === 'none') {
+            deviceSelect.value = '';
+        }
+
+        // Trigger downstream update
+        loadVdomsForDevice();
+    }
+
+    // v1.3.0 - Dynamic dropdown loaders for segmentation
     async function loadVdomsForDevice() {
         const deviceId = document.getElementById('ai-device').value;
         const vdomSelect = document.getElementById('ai-vdom');
@@ -957,30 +1034,112 @@
         }
     }
 
-    async function loadRecommendations() {
-        const container = document.getElementById('recommendations-container');
+    let currentAuditTab = 'static'; // Default
+
+    async function loadStaticAudit() {
+        // Get device ID from Global Filter
+        let deviceId = document.getElementById('global-device-select').value;
+        if (!deviceId) {
+            alert("Por favor seleccione un equipo en el filtro superior primero.");
+            return;
+        }
+
+        const btn = event.currentTarget;
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analizando...';
+
         try {
-            // Get Filters
-            const deviceId = document.querySelector('select[name="device_id"]').value;
+            await apiCall('/logs/audit/static', 'POST', JSON.stringify({ device_id: deviceId }));
+            loadRecommendations('static');
+        } catch (e) {
+            alert('Error en auditoría estática: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    async function runDynamicAudit() {
+        let deviceId = document.getElementById('global-device-select').value;
+        if (!deviceId) {
+            alert("Por favor seleccione un equipo en el filtro superior primero.");
+            return;
+        }
+
+        const btn = event.currentTarget;
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analizando...';
+
+        try {
+            await apiCall('/logs/audit/dynamic', 'POST', JSON.stringify({ device_id: deviceId, days_back: 30 }));
+            loadRecommendations('dynamic');
+        } catch (e) {
+            alert('Error en auditoría dinámica: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    async function loadRecommendations(type) {
+        if (type) currentAuditTab = type;
+
+        let containerId = '';
+        let categories = [];
+
+        if (currentAuditTab === 'static') {
+            containerId = 'static-audit-container';
+            categories = ['optimize_policy', 'policy', 'security'];
+        } else if (currentAuditTab === 'dynamic') {
+            containerId = 'dynamic-audit-container';
+            categories = ['optimization', 'traffic', 'security', 'ai_security', 'ai_new_policy'];
+        } else {
+            return; // Unknown tab
+        }
+
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p>Cargando resultados...</p></div>';
+
+        try {
+            // Get Device Filter
+            const deviceId = document.getElementById('global-device-select').value;
+
             let url = `/logs/recommendations?page=${recPage}&per_page=${recPerPage}`;
             if (deviceId) url += `&device_id=${deviceId}`;
+            if (categories.length > 0) url += `&category=${categories.join(',')}`;
 
             const data = await apiCall(url);
             container.innerHTML = '';
 
             if (!data.data || data.data.length === 0) {
-                container.innerHTML = '<div class="text-center py-5 text-muted"><p>No hay recomendaciones de seguridad aún.</p></div>';
+                container.innerHTML = '<div class="text-center py-5 text-muted"><i class="bi bi-check-circle fs-1 mb-3 d-block text-success"></i><p>No se encontraron problemas de seguridad.</p></div>';
                 updateRecPagination(null);
                 return;
             }
 
             data.data.forEach(rec => {
                 // Determine styling based on category
-                const isNewPolicy = rec.category === 'ai_new_policy';
-                const borderColor = isNewPolicy ? 'border-success' : 'border-warning';
-                const iconClass = isNewPolicy ? 'bi-plus-circle-fill text-success' : 'bi-exclamation-triangle-fill text-warning';
-                const headerText = isNewPolicy ? 'Nueva Política Sugerida' : 'Detectado';
-                
+                const isNewPolicy = rec.category === 'ai_new_policy' || rec.category === 'new_policy';
+                const isCritical = rec.severity === 'critical' || rec.severity === 'high';
+
+                let borderColor = 'border-info';
+                let iconClass = 'bi-info-circle-fill text-info';
+
+                if (isCritical) {
+                    borderColor = 'border-danger';
+                    iconClass = 'bi-exclamation-octagon-fill text-danger';
+                } else if (isNewPolicy) {
+                    borderColor = 'border-success';
+                    iconClass = 'bi-plus-circle-fill text-success';
+                } else if (rec.severity === 'medium') {
+                    borderColor = 'border-warning';
+                    iconClass = 'bi-exclamation-triangle-fill text-warning';
+                }
+
                 const div = document.createElement('div');
                 div.className = `alert alert-light border-start ${borderColor} border-4 shadow-sm mb-3`;
                 div.innerHTML = `
@@ -990,27 +1149,42 @@
                                 <input class="form-check-input rec-chk" type="checkbox" value="${rec.id}">
                             </div>
                             <h6 class="alert-heading fw-bold mb-1">
-                                <i class="bi ${iconClass} me-2"></i>${headerText}: ${rec.title || 'Anomalía Detectada'}
-                                ${isNewPolicy ? '<span class="badge bg-success ms-2">NEW POLICY</span>' : ''}
+                                <i class="bi ${iconClass} me-2"></i>${rec.title || 'Recomendación'}
                             </h6>
                         </div>
-                        <span class="badge bg-${rec.severity === 'high' || rec.severity === 'critical' ? 'danger' : (isNewPolicy ? 'success' : 'warning')} text-uppercase">${rec.severity}</span>
+                        <span class="badge bg-${rec.severity === 'high' || rec.severity === 'critical' ? 'danger' : (rec.severity === 'medium' ? 'warning' : 'info')} text-uppercase">${rec.severity}</span>
                     </div>
-                    <p class="mb-2 text-muted small">${rec.created_at ? new Date(rec.created_at).toLocaleString() : ''}</p>
+                    <p class="mb-2 text-muted small">${rec.created_at ? new Date(rec.created_at).toLocaleString() : ''} | Cat: ${rec.category}</p>
                     <p class="mb-2">${rec.description || ''}</p>
-                    ${rec.affected_count ? `<p class="small mb-2"><strong>${rec.affected_count}</strong> conexiones afectadas</p>` : ''}
+                    ${rec.affected_count ? `<p class="small mb-2"><strong>${rec.affected_count}</strong> eventos relacionados</p>` : ''}
                     
-                    ${(rec.related_policy_id || rec.related_policy_id === 0 || rec.related_policy_id === '0') ? `
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <p class="small mb-0"><i class="bi bi-shield me-1"></i>Política relacionada: <code>${rec.related_policy_id}</code></p>
-                            <button class="btn btn-sm btn-outline-dark" onclick="viewPolicyAnalysis('${rec.related_policy_id}', '${rec.device_id}', this)" data-rec='${JSON.stringify(rec).replace(/'/g, "&#39;")}'>
-                                <i class="bi bi-search me-1"></i>Ver Análisis
+                    ${(rec.related_policy_id || rec.related_policy_id === 0) ? `
+                        <div class="d-flex justify-content-between align-items-center mb-2 bg-white p-2 border rounded">
+                            <p class="small mb-0"><i class="bi bi-shield me-1"></i>Política: <code>${rec.related_policy_id}</code></p>
+                            <button class="btn btn-sm btn-outline-dark py-0" onclick="viewPolicyAnalysis('${rec.related_policy_id}', '${rec.device_id}', this)" data-rec='${JSON.stringify(rec).replace(/'/g, "&#39;")}'>
+                                <i class="bi bi-search me-1"></i>Ver Detalle
                             </button>
                         </div>
                     ` : ''}
                     
                     <hr class="my-2">
-                    <div class="small"><strong>Acción Sugerida:</strong> ${rec.recommendation || 'Revisar configuración de seguridad'}</div>
+                    <div class="small"><strong>Recomendación:</strong> ${rec.recommendation || 'N/A'}</div>
+                    
+                    ${rec.cli_remediation ? `
+                         <div class="mt-2 text-end">
+                            <button class="btn btn-sm btn-link text-decoration-none" type="button" data-bs-toggle="collapse" data-bs-target="#cli-${rec.id.replace(/\W/g, '')}">
+                                <i class="bi bi-terminal me-1"></i>Ver CLI
+                            </button>
+                            <div class="collapse mt-2 text-start" id="cli-${rec.id.replace(/\W/g, '')}">
+                                <div class="bg-dark p-2 rounded position-relative">
+                                    <pre class="text-success small mb-0 font-monospace">${rec.cli_remediation}</pre>
+                                    <button class="btn btn-xs btn-outline-secondary position-absolute top-0 end-0 m-1 py-0" onclick="navigator.clipboard.writeText(this.previousElementSibling.innerText)">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                         </div>
+                    ` : ''}
                 `;
                 container.appendChild(div);
             });
@@ -1354,6 +1528,354 @@
             }
         } catch (error) {
             alert('Error al eliminar recomendaciones: ' + error.message);
+        }
+    }
+
+    // Topology Globals
+    let topologyNetwork = null;
+    let topologyNodes = null;
+    let topologyEdges = null;
+
+    async function loadTopology() {
+        const siteId = document.getElementById('topology-site-filter').value;
+        const mode = document.getElementById('topology-mode').value;
+        const container = document.getElementById('topology-network');
+
+        container.innerHTML = '<div class="d-flex h-100 align-items-center justify-content-center"><div class="spinner-border text-primary"></div></div>';
+
+        try {
+            const data = await apiCall(`/logs/topology?site_id=${siteId || ''}&mode=${mode}`);
+
+            // Debug Output
+            const debugPre = document.getElementById('topology-json-output');
+            if (debugPre) {
+                debugPre.textContent = JSON.stringify(data, null, 2);
+            }
+
+            if (!data.success || !data.nodes || data.nodes.length === 0) {
+                container.innerHTML = '<div class="d-flex h-100 align-items-center justify-content-center text-muted">No data available for topology</div>';
+                return;
+            }
+
+            // TEXT VIEW HANDLER
+            if (topologyViewMode === 'text') {
+                renderTopologyText(container, data.nodes, data.edges);
+                return;
+            }
+
+            // Clean container for graphic
+            container.innerHTML = '';
+
+            // If loaded saved data, perhaps auto-switch dropdown to 'saved' if we asked for dynamic but got saved?
+            // API logic: if dynamic, returns generated. If saved, returns stored.
+            // If response has is_saved=true, user might want to know.
+            if (data.is_saved && mode === 'saved') {
+                // Good
+            }
+
+            // Create a network
+            topologyNodes = new vis.DataSet(data.nodes);
+            topologyEdges = new vis.DataSet(data.edges);
+
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    size: 20,
+                    font: { size: 14 }
+                },
+                edges: {
+                    font: { size: 12, align: 'middle' },
+                    color: { color: '#848484', highlight: '#848484', hover: '#848484' },
+                    arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+                    smooth: { type: 'continuous' }
+                },
+                physics: {
+                    stabilization: false,
+                    barnesHut: { gravitationalConstant: -2000, springConstant: 0.04 }
+                },
+                layout: {
+                    hierarchical: {
+                        enabled: mode === 'dynamic', // Only use hierarchy for dynamic initial layout
+                        direction: 'UD',
+                        sortMethod: 'directed',
+                        nodeSpacing: 150,
+                        levelSeparation: 150
+                    }
+                },
+                interaction: { hover: true }
+            };
+
+            topologyNetwork = new vis.Network(container, { nodes: topologyNodes, edges: topologyEdges }, options);
+
+            // Center graph after stabilization
+            topologyNetwork.once("stabilizationIterationsDone", function () {
+                topologyNetwork.fit({
+                    animation: { duration: 1000, easingFunction: 'easeInOutQuad' }
+                });
+            });
+
+        } catch (error) {
+            console.error('Topology error:', error);
+            container.innerHTML = `<div class="alert alert-danger m-3">Error loading topology: ${error.message}</div>`;
+        }
+    }
+
+    async function saveTopology() {
+        const siteId = document.getElementById('topology-site-filter').value;
+        if (!siteId) {
+            alert("Seleccione un sitio para guardar la topología.");
+            return;
+        }
+        if (!topologyNetwork) return;
+
+        if (!confirm("¿Desea guardar el diseño actual para este sitio?")) return;
+
+        try {
+            // Get positions
+            const positions = topologyNetwork.getPositions();
+
+            // Merge positions into nodes array
+            const nodes = topologyNodes.get().map(n => {
+                if (positions[n.id]) {
+                    n.x = positions[n.id].x;
+                    n.y = positions[n.id].y;
+                }
+                return n;
+            });
+
+            const edges = topologyEdges.get();
+
+            const payload = {
+                site_id: siteId,
+                topology: {
+                    nodes: nodes,
+                    edges: edges
+                }
+            };
+
+            const response = await apiCall('/logs/topology', 'POST', JSON.stringify(payload));
+            if (response.success) {
+                alert("Topología guardada correctamente.");
+            } else {
+                alert("Error: " + response.error);
+            }
+
+        } catch (e) {
+            alert("Error al guardar: " + e.message);
+        }
+    }
+
+
+    // Toggle View Mode
+    let topologyViewMode = 'graphic'; // graphic vs text
+
+    function toggleTopologyView() {
+        topologyViewMode = topologyViewMode === 'graphic' ? 'text' : 'graphic';
+        loadTopology(); // Reload to render in new mode
+    }
+
+    function renderTopologyText(container, nodes, edges) {
+        // Build hierarchy: Site -> Device -> VDOM -> Interface
+        let html = '<div class="p-4" style="overflow-y: auto; max-height: 600px;">';
+
+        let sites = nodes.filter(n => n.group === 'site');
+
+        if (sites.length === 0 && nodes.length > 0) {
+            // If no sites explicitly (fallback), try to group everything else
+            sites = [{ id: 'unknown', label: 'Site Desconocido', group: 'site' }];
+        }
+
+        sites.forEach(site => {
+            html += `<h5 class="text-danger border-bottom pb-2"><i class="bi bi-circle-fill me-2"></i>${site.label}</h5>`;
+
+            // Devices for this site
+            // In graph, edges connected site->device. 
+            // We can look for edges from site.id or look for nodes that belong (if we had parent prop).
+            // Using edges is safer given the vis.js structure.
+            let deviceEdges = edges.filter(e => e.from === site.id);
+            let devices = nodes.filter(n => n.group === 'device' && deviceEdges.some(e => e.to === n.id));
+
+            if (site.id === 'unknown') {
+                devices = nodes.filter(n => n.group === 'device');
+            }
+
+            if (devices.length === 0) {
+                html += '<p class="text-muted ms-4">No devices found.</p>';
+            }
+
+            html += '<ul class="list-group ms-3 mb-3 border-start border-3 border-primary">';
+            devices.forEach(dev => {
+                html += `<li class="list-group-item border-0 bg-light mb-1">
+                            <i class="bi bi-hdd-network-fill text-primary me-2"></i><strong>${dev.label}</strong>
+                            <ul class="list-group mt-2 ms-3 border-start border-3 border-success">`;
+
+                let vdomEdges = edges.filter(e => e.from === dev.id);
+                let vdoms = nodes.filter(n => n.group === 'vdom' && vdomEdges.some(e => e.to === n.id));
+
+                vdoms.forEach(vdom => {
+                    html += `<li class="list-group-item border-0 pt-1 pb-1">
+                                <i class="bi bi-hexagon-fill text-success me-2"></i>${vdom.label}
+                                <ul class="list-group mt-1 ms-3 border-start border-2">`;
+
+                    let intfEdges = edges.filter(e => e.from === vdom.id);
+                    let intfs = nodes.filter(n => n.group === 'interface' && intfEdges.some(e => e.to === n.id));
+
+                    intfs.forEach(intf => {
+                        // Parse label for IP
+                        let parts = intf.label.split('\n');
+                        let name = parts[0];
+                        let ip = parts.length > 1 ? parts[1] : '';
+                        let badgeClass = intf.color === '#dc3545' ? 'danger' : (intf.color === '#0dcaf0' ? 'info' : 'secondary');
+
+                        html += `<li class="list-group-item border-0 py-0 small text-muted">
+                                    <i class="bi bi-link me-1"></i> ${name} 
+                                    ${ip ? `<span class="badge bg-${badgeClass} ms-2">${ip}</span>` : ''}
+                                  </li>`;
+                    });
+
+                    if (intfs.length === 0) html += '<li class="list-group-item border-0 text-muted small">No interfaces</li>';
+
+                    html += `</ul></li>`;
+                });
+
+                if (vdoms.length === 0) {
+                    // Check for direct interfaces (no vdom node?)
+                    // OR just say no VDOMs
+                    html += '<li class="list-group-item border-0 text-muted small">No VDOMs found</li>';
+                }
+
+                html += `</ul></li>`;
+            });
+            html += '</ul>';
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+        container.style.backgroundColor = '#ffffff'; // White background for text
+    }
+
+    // Auto-load topology when tab is shown
+    document.getElementById('topology-tab')?.addEventListener('shown.bs.tab', () => {
+        // Prevent re-loading if already created (avoids duplicated canvases or reset positions)
+        if (topologyViewMode === 'graphic' && !topologyNetwork) {
+            loadTopology();
+        } else if (topologyViewMode === 'text' && document.getElementById('topology-network').innerHTML === '') {
+            loadTopology();
+        }
+    });
+
+    // --- New Policies Logic ---
+    async function loadSuggestedPolicies() {
+        const container = document.getElementById('suggested-policies-container');
+        if (!container) return; // Guard clause
+
+        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-success"></div><p>Cargando sugerencias...</p></div>';
+
+        try {
+            // Filter specialized for "new_policy" category
+            const response = await apiCall('/logs/recommendations?category=new_policy');
+            if (response.success && response.data && response.data.length > 0) {
+                let html = '<div class="row g-3">';
+                response.data.forEach(rec => {
+                    html += `
+                        <div class="col-md-6">
+                            <div class="card h-100 border-success shadow-sm">
+                                <div class="card-header bg-success text-white bg-opacity-75 d-flex justify-content-between align-items-center">
+                                    <span class="badge bg-white text-success">SUGERENCIA</span>
+                                    <small class="text-white-50">${new Date(rec.created_at).toLocaleString()}</small>
+                                </div>
+                                <div class="card-body">
+                                    <h6 class="card-title fw-bold">${rec.title}</h6>
+                                    <p class="card-text small">${rec.description}</p>
+                                    
+                                    ${rec.suggested_policy ? `
+                                        <div class="bg-light p-2 rounded small font-monospace mb-2 border">
+                                            <div><strong>Src:</strong> ${rec.suggested_policy.src_addr || 'any'}</div>
+                                            <div><strong>Dst:</strong> ${rec.suggested_policy.dst_addr || 'any'}</div>
+                                            <div><strong>Svc:</strong> ${rec.suggested_policy.service || 'any'}</div>
+                                            <div><strong>Action:</strong> <span class="text-success fw-bold">${rec.suggested_policy.action || 'ACCEPT'}</span></div>
+                                        </div>
+                                    ` : ''}
+
+                                    ${rec.cli_remediation ? `
+                                        <div class="mt-2">
+                                            <button class="btn btn-sm btn-outline-secondary w-100 text-start" type="button" data-bs-toggle="collapse" data-bs-target="#cli-${rec.id}">
+                                                <i class="bi bi-terminal me-2"></i>Ver Configuración CLI
+                                            </button>
+                                            <div class="collapse mt-2" id="cli-${rec.id}">
+                                                <div class="bg-dark p-2 rounded position-relative">
+                                                     <button class="btn btn-sm btn-link text-white position-absolute top-0 end-0" onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText)">
+                                                        <i class="bi bi-clipboard"></i>
+                                                    </button>
+                                                    <pre class="mb-0 text-success small" style="white-space: pre-wrap;">${rec.cli_remediation}</pre>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = `
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-check-circle fs-1 mb-3 d-block text-success"></i>
+                        <p>No hay nuevas políticas sugeridas pendientes.</p>
+                        <small>Ejecute nuevo análisis para generar sugerencias.</small>
+                    </div>`;
+            }
+        } catch (e) {
+            container.innerHTML = `<div class="alert alert-danger">Error cargando sugerencias: ${e.message}</div>`;
+        }
+    }
+
+    // Auto-load new policies tab
+    document.getElementById('new-policies-tab')?.addEventListener('shown.bs.tab', loadSuggestedPolicies);
+
+
+    // --- Topology Analysis ---
+    async function analyzeTopology() {
+        const siteId = document.getElementById('topology-site-filter').value;
+        if (!confirm("Esto enviará la estructura de la topología al motor de IA para buscar ineficiencias y riesgos. ¿Continuar?")) return;
+
+        const btn = document.querySelector('button[onclick="analyzeTopology()"]');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Analizando...';
+        }
+
+        try {
+            const response = await apiCall('/logs/analyze/topology', 'POST', JSON.stringify({ site_id: siteId }));
+
+            if (response.success) {
+                // Refresh topology to show any new insights (e.g. if we add visual indicators later)
+                // For now, it ensures the graph is up to date
+                loadTopology();
+
+                alert("Análisis de topología completado.");
+
+                if (confirm("Se han generado nuevas sugerencias de políticas basadas en Zero Trust. ¿Desea revisarlas ahora en la pestaña de Políticas?")) {
+                    // Switch to New Policies tab
+                    const triggerEl = document.querySelector('#new-policies-tab');
+                    if (triggerEl) {
+                        const tab = new bootstrap.Tab(triggerEl);
+                        tab.show();
+                        loadSuggestedPolicies();
+                    }
+                }
+            } else {
+                alert("Error: " + response.error);
+            }
+        } catch (e) {
+            alert("Error ejecutando análisis: " + e.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-magic"></i> Analizar';
+            }
         }
     }
 

@@ -14,7 +14,11 @@ class ConfigParserService:
                 'system': {},
                 'interfaces': [],
                 'firmware': None,
-                'vdoms': []
+                'vdoms': [],
+                'addresses': [],
+                'services': [],
+                'service_groups': [],
+                'policies': []
             }
         }
         
@@ -71,11 +75,11 @@ class ConfigParserService:
         global_block = re.search(r'config system global(.*?)end', content, re.DOTALL)
         if global_block:
             g_text = global_block.group(1)
-            timezone = re.search(r'set timezone "([^"]+)"', g_text)
-            if timezone: data['config_data']['system']['timezone'] = timezone.group(1)
+            # timezone = re.search(r'set timezone "([^"]+)"', g_text)
+            # if timezone: data['config_data']['system']['timezone'] = timezone.group(1)
             
-            admin_timeout = re.search(r'set admintimeout (\d+)', g_text)
-            if admin_timeout: data['config_data']['system']['admintimeout'] = admin_timeout.group(1)
+            # admin_timeout = re.search(r'set admintimeout (\d+)', g_text)
+            # if admin_timeout: data['config_data']['system']['admintimeout'] = admin_timeout.group(1)
             
         # 4b. Extract VDOMs
         # config vdom
@@ -185,4 +189,220 @@ class ConfigParserService:
                 }
                 data['config_data']['interfaces'].append(intf_info)
 
+        # 6. Parse Objects & Policies by VDOM Context
+        # We split by 'config vdom' sections to ensure objects are associated with correct VDOM.
+        
+        vdom_sections = re.split(r'config vdom', content)
+        
+        if len(vdom_sections) > 1: # VDOMs present
+            for section in vdom_sections[1:]: # Skip preamble
+                # Extract vdom name
+                vdom_name_match = re.match(r'\s*edit\s+(?:(["\'])([^"\']+)\1|(\S+))', section)
+                if not vdom_name_match: continue
+                current_vdom = vdom_name_match.group(2) if vdom_name_match.group(2) else vdom_name_match.group(3)
+                
+                # Parse objects in this section
+                ConfigParserService._parse_vdom_objects(section, current_vdom, data)
+        else:
+             # No VDOM structure found, parse entirely as root
+             ConfigParserService._parse_vdom_objects(content, 'root', data)
+
         return data
+
+    @staticmethod
+    def _parse_vdom_objects(content, vdom, data):
+        """Helper to parse all firewall objects and policies within a given VDOM/Context"""
+        import re
+        
+        # --- Addresses ---
+        addr_block_match = re.search(r'config firewall address\s*\n(.*?)(?:^end$|\nend\n)', content, re.DOTALL | re.MULTILINE)
+        if addr_block_match:
+            addr_text = addr_block_match.group(1)
+            edits = re.split(r'\n\s*edit\s+', addr_text)
+            for edit in edits[1:]:
+                # Extract name
+                if edit.startswith('"'):
+                    end_quote = edit.find('"', 1)
+                    name = edit[1:end_quote]
+                    block = edit[end_quote+1:]
+                else:
+                    name_parts = edit.split(None, 1)
+                    name = name_parts[0]
+                    block = name_parts[1] if len(name_parts) > 1 else ""
+
+                type_match = re.search(r'set type (\w+)', block)
+                subnet_match = re.search(r'set subnet (\S+ \S+)', block)
+                start_ip_match = re.search(r'set start-ip (\S+)', block)
+                end_ip_match = re.search(r'set end-ip (\S+)', block)
+                fqdn_match = re.search(r'set fqdn "([^"]+)"', block)
+                country_match = re.search(r'set country "([^"]+)"', block)
+                comment_match = re.search(r'set comment "([^"]+)"', block)
+                
+                addr_info = {
+                    'name': name,
+                    'vdom': vdom,
+                    'type': type_match.group(1) if type_match else 'ipmask', 
+                    'subnet': subnet_match.group(1) if subnet_match else None,
+                    'start_ip': start_ip_match.group(1) if start_ip_match else None,
+                    'end_ip': end_ip_match.group(1) if end_ip_match else None,
+                    'fqdn': fqdn_match.group(1) if fqdn_match else None,
+                    'country': country_match.group(1) if country_match else None,
+                    'comments': comment_match.group(1) if comment_match else None,
+                    'members': None, 
+                    'raw_config': block.strip()
+                }
+                data['config_data']['addresses'].append(addr_info)
+
+        # --- Address Groups ---
+        addr_grp_match = re.search(r'config firewall addrgrp\s*\n(.*?)(?:^end$|\nend\n)', content, re.DOTALL | re.MULTILINE)
+        if addr_grp_match:
+            grp_text = addr_grp_match.group(1)
+            edits = re.split(r'\n\s*edit\s+', grp_text)
+            for edit in edits[1:]:
+                if edit.startswith('"'):
+                    end_quote = edit.find('"', 1)
+                    name = edit[1:end_quote]
+                    block = edit[end_quote+1:]
+                else:
+                    name_parts = edit.split(None, 1)
+                    name = name_parts[0]
+                    block = name_parts[1] if len(name_parts) > 1 else ""
+
+                member_match = re.search(r'set member (.+)', block)
+                members = []
+                if member_match:
+                    raw_members = member_match.group(1)
+                    members = [m.strip('"') for m in re.findall(r'"[^"]*"|[^\s"]+', raw_members)]
+
+                grp_info = {
+                    'name': name,
+                    'vdom': vdom,
+                    'type': 'group',
+                    'subnet': None,
+                    'members': members,
+                    'comments': None,
+                    'raw_config': block.strip(),
+                    # Add remaining fields as None to match schema
+                    'start_ip': None, 'end_ip': None, 'fqdn': None, 'country': None
+                }
+                data['config_data']['addresses'].append(grp_info)
+
+        # --- Services (Custom) ---
+        svc_block_match = re.search(r'config firewall service custom\s*\n(.*?)(?:^end$|\nend\n)', content, re.DOTALL | re.MULTILINE)
+        if svc_block_match:
+            svc_text = svc_block_match.group(1)
+            edits = re.split(r'\n\s*edit\s+', svc_text)
+            for edit in edits[1:]:
+                if edit.startswith('"'):
+                    end_quote = edit.find('"', 1)
+                    name = edit[1:end_quote]
+                    block = edit[end_quote+1:]
+                else:
+                    name_parts = edit.split(None, 1)
+                    name = name_parts[0]
+                    block = name_parts[1] if len(name_parts) > 1 else ""
+
+                protocol_match = re.search(r'set protocol (TCP/UDP/SCTP|ICMP|IP)', block)
+                tcp_port_match = re.search(r'set tcp-portrange ([\d\-]+)', block)
+                udp_port_match = re.search(r'set udp-portrange ([\d\-]+)', block)
+                category_match = re.search(r'set category "([^"]+)"', block)
+                comment_match = re.search(r'set comment "([^"]+)"', block)
+
+                svc_info = {
+                    'name': name,
+                    'vdom': vdom,
+                    'protocol': protocol_match.group(1) if protocol_match else 'TCP/UDP/SCTP',
+                    'tcp_portrange': tcp_port_match.group(1) if tcp_port_match else None,
+                    'udp_portrange': udp_port_match.group(1) if udp_port_match else None,
+                    'category': category_match.group(1) if category_match else None,
+                    'comments': comment_match.group(1) if comment_match else None,
+                    'is_group': False
+                }
+                data['config_data']['services'].append(svc_info)
+
+        # --- Service Groups ---
+        grp_block_match = re.search(r'config firewall service group\s*\n(.*?)(?:^end$|\nend\n)', content, re.DOTALL | re.MULTILINE)
+        if grp_block_match:
+            grp_text = grp_block_match.group(1)
+            edits = re.split(r'\n\s*edit\s+', grp_text)
+            for edit in edits[1:]:
+                if edit.startswith('"'):
+                    end_quote = edit.find('"', 1)
+                    name = edit[1:end_quote]
+                    block = edit[end_quote+1:]
+                else:
+                    name_parts = edit.split(None, 1)
+                    name = name_parts[0]
+                    block = name_parts[1] if len(name_parts) > 1 else ""
+
+                member_match = re.search(r'set member (.+)', block)
+                members = []
+                if member_match:
+                    raw_members = member_match.group(1)
+                    members = [m.strip('"') for m in re.findall(r'"[^"]*"|[^\s"]+', raw_members)]
+
+                grp_info = {
+                    'name': name,
+                    'vdom': vdom,
+                    'members': members,
+                    'is_group': True,
+                    # Fill others
+                    'protocol': None, 'tcp_portrange': None, 'udp_portrange': None,
+                    'category': None, 'comments': None
+                }
+                data['config_data']['services'].append(grp_info)
+
+        # --- Policies ---
+        ConfigParserService._parse_policy_block(content, vdom, data)
+
+    @staticmethod
+    def _parse_policy_block(content, vdom, data):
+        """Helper to parse a policy block within a specific context"""
+        import re
+        poly_block_match = re.search(r'config firewall policy\s*\n(.*?)(?:^end$|\nend\n)', content, re.DOTALL | re.MULTILINE)
+        if not poly_block_match: return
+        
+        poly_text = poly_block_match.group(1)
+        edits = re.split(r'\n\s*edit\s+', poly_text)
+        
+        for edit in edits[1:]:
+            # Policy ID is the name
+            pid_match = re.match(r'(\d+)', edit)
+            if not pid_match: continue
+            policy_id = pid_match.group(1)
+            
+            # Helper to extract list fields (srcaddr, dstaddr, service)
+            # set srcaddr "all" "object2"
+            def extract_list(field_name):
+                match = re.search(f'set {field_name} (.+)', edit)
+                if match:
+                    # Clean up: "all" "Test Object" -> ['all', 'Test Object']
+                    return [m.strip('"') for m in re.findall(r'"[^"]*"|[^\s"]+', match.group(1))]
+                return []
+                
+            srcintf = extract_list('srcintf')
+            dstintf = extract_list('dstintf')
+            srcaddr = extract_list('srcaddr')
+            dstaddr = extract_list('dstaddr')
+            service = extract_list('service')
+            
+            action_match = re.search(r'set action (\w+)', edit)
+            status_match = re.search(r'set status (\w+)', edit)
+            uuid_match = re.search(r'set uuid ([\w\-]+)', edit)
+            name_match = re.search(r'set name "([^"]+)"', edit)
+            
+            policy_info = {
+                'id': policy_id,
+                'vdom': vdom,
+                'name': name_match.group(1) if name_match else f"Policy {policy_id}",
+                'uuid': uuid_match.group(1) if uuid_match else None,
+                'action': action_match.group(1) if action_match else 'deny',
+                'status': status_match.group(1) if status_match else 'enable',
+                'srcintf': srcintf,
+                'dstintf': dstintf,
+                'srcaddr': srcaddr,
+                'dstaddr': dstaddr,
+                'service': service,
+                'raw_config': edit.strip()
+            }
+            data['config_data']['policies'].append(policy_info)

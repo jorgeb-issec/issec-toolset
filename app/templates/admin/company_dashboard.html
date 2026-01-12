@@ -69,7 +69,7 @@
                     </div>
                 </div>
 
-                <!-- Log Analyzer -->
+                <!-- IS Analyzer -->
                 {% set logs_active = 'log_analyzer' in company.products %}
                 <div class="col-md-6">
                     <div
@@ -85,7 +85,7 @@
                                 <span class="badge bg-light text-muted">Deshabilitado</span>
                                 {% endif %}
                             </div>
-                            <h4 class="card-title h5 fw-bold">Log Analyzer</h4>
+                            <h4 class="card-title h5 fw-bold">IS Analyzer</h4>
                             <p class="card-text text-muted small mb-4">
                                 Análisis de logs y detección de amenazas en tiempo real.
                             </p>
@@ -235,13 +235,13 @@
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="products" value="log_analyzer" {%
                                 if 'log_analyzer' in company.products %}checked{% endif %}>
-                            <label class="form-check-label">Log Analyzer</label>
+                            <label class="form-check-label">IS Analyzer</label>
                         </div>
                     </div>
 
                     <!-- Gemini/AI Configuration -->
                     <div class="mb-3">
-                        <label class="form-label">Gemini API Key (Log Analyzer AI)</label>
+                        <label class="form-label">Gemini API Key (IS Analyzer AI)</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-key"></i></span>
                             <input type="password" name="gemini_api_key" class="form-control"

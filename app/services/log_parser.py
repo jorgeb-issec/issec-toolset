@@ -6,6 +6,11 @@ import re
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 import uuid
+# Import StaticAnalyzer for shared logic if needed, 
+# or just remove the duplicated method if it's no longer used internally here.
+# LogAnalyzer's main job is dynamic analysis (logs).
+# The 'analyze_policies' method was static. 
+
 
 
 class FortiLogParser:
@@ -635,92 +640,9 @@ end
     @classmethod
     def analyze_policies(cls, policies: List[Dict[str, Any]], stats: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """
-        Analyze policy configurations for best practices (Static Analysis)
-        
-        v1.3.0: More precise detection, suggests RESTRICTIONS not disable
-        
-        Checks for:
-        - Any/Any/All Allow rules
-        - Wide open source/destination
+        DEPRECATED: Use StaticAnalyzer.analyze_policies instead.
+        Kept for backward compatibility if called directly.
         """
-        recommendations = []
-        
-        for p in policies:
-            pid = p.get('policy_id')
-            if not pid: continue
-            
-            src = str(p.get('src_addr', '')).strip()
-            dst = str(p.get('dst_addr', '')).strip()
-            svc = str(p.get('service', '')).strip()
-            action = str(p.get('action', '')).lower()
-            status = str(p.get('status', 'enable')).lower()
-            
-            if status == 'disable':
-                continue
-            
-            # v1.3.0: More precise detection - only exact 'all' matches
-            # Not triggered by policies that CONTAIN 'all' in a longer name
-            src_lower = src.lower()
-            dst_lower = dst.lower()
-            svc_lower = svc.lower()
-            
-            # Check if src/dst/service is EXACTLY 'all' or 'any' (not part of a longer name)
-            def is_wildcard(value: str) -> bool:
-                """Check if value represents a wildcard (all/any)"""
-                val = value.strip().lower()
-                # Exact match
-                if val in ('all', 'any', '0.0.0.0/0', '0.0.0.0 0.0.0.0'):
-                    return True
-                # Array/list with single 'all' - e.g. "['all']" or '["all"]'
-                if val in ("['all']", '["all"]', "['any']", '["any"]'):
-                    return True
-                return False
-            
-            is_any_src = is_wildcard(src)
-            is_any_dst = is_wildcard(dst)
-            is_any_svc = is_wildcard(svc) or svc_lower == 'always'
-            is_accept = 'accept' in action
-            
-            # Check 1: Any/Any/All Allow (Critical)
-            if is_any_src and is_any_dst and is_any_svc and is_accept:
-                recs_exist = [r for r in recommendations if r.get('related_policy_id') == pid]
-                if not recs_exist:
-                    recommendations.append({
-                        'category': 'security_audit',
-                        'severity': 'critical',
-                        'title': f'Política {pid} Completamente Abierta (Any/Any/ALL)',
-                        'description': f'La política {pid} permite TODO el tráfico: origen=all, destino=all, servicio=ALL. Esto anula el propósito del firewall.',
-                        'recommendation': 'RESTRINGIR esta política basándose en el tráfico real observado. Ver comando CLI para opciones de restricción.',
-                        'related_policy_id': pid,
-                        'related_vdom': p.get('vdom'),
-                        'cli_remediation': cls._generate_least_privilege_cli(str(pid), stats, p)
-                    })
-            
-            # Check 2: Wide Source with ALL Services (High)
-            elif is_any_src and not is_any_dst and is_any_svc and is_accept:
-                 recommendations.append({
-                        'category': 'security_audit',
-                        'severity': 'high',
-                        'title': f'Política {pid} con Origen Abierto (all → específico)',
-                        'description': f'Permite tráfico desde cualquier origen hacia destinos específicos usando TODOS los servicios.',
-                        'recommendation': 'Restringir los servicios permitidos. No usar "ALL" en reglas de entrada.',
-                        'related_policy_id': pid,
-                        'related_vdom': p.get('vdom'),
-                        'cli_remediation': cls._generate_least_privilege_cli(str(pid), stats, p)
-                 })
-            
-            # Check 3: Open destination with specific source (Medium)
-            elif not is_any_src and is_any_dst and is_any_svc and is_accept:
-                 recommendations.append({
-                        'category': 'security_audit',
-                        'severity': 'medium',
-                        'title': f'Política {pid} con Destino Abierto (específico → all)',
-                        'description': f'Permite tráfico hacia cualquier destino. Origen: {src[:50]}...',
-                        'recommendation': 'Considerar restringir destinos y servicios basándose en necesidades reales.',
-                        'related_policy_id': pid,
-                        'related_vdom': p.get('vdom'),
-                        'cli_remediation': cls._generate_least_privilege_cli(str(pid), stats, p)
-                 })
-
-        return recommendations
+        from app.services.static_analyzer import StaticAnalyzer
+        return StaticAnalyzer.analyze_policies(policies, stats)
 

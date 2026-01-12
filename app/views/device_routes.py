@@ -6,6 +6,7 @@ from app.models.vdom import VDOM
 from app.extensions.db import db
 from app.decorators import company_required
 from app.services.config_parser import ConfigParserService
+from app.services.config_loader import ConfigLoaderService
 import uuid
 import os
 from werkzeug.utils import secure_filename
@@ -17,7 +18,12 @@ device_bp = Blueprint('device', __name__)
 @company_required
 def list_devices():
     devices = g.tenant_session.query(Equipo).all()
-    sites = g.tenant_session.query(Site).all()
+    # Annotate sites manually
+    sites = db.session.query(Site).all()
+    site_map = {s.id: s for s in sites}
+    for d in devices:
+        d.site = site_map.get(d.site_id)
+        
     return render_template('admin/devices/list.html', devices=devices, sites=sites)
 
 @device_bp.route('/admin/devices/add', methods=['POST'])
@@ -130,11 +136,25 @@ def import_device_config():
                 g.tenant_session.add(new_device)
                 g.tenant_session.flush()
                 
-                # Now create VDOMs if present in config
-                if data['config_data'].get('vdoms'):
-                    for v_name in data['config_data']['vdoms']:
-                        new_vdom = VDOM(device_id=new_device.id, name=v_name, comments="Imported from Global Config")
-                        g.tenant_session.add(new_vdom)
+                # INTEGRATION: Use ConfigLoaderService to load all objects (VDOMs, Interfaces, Objects, Policies)
+                success, msg = ConfigLoaderService.load_config(new_device.id, data['config_data'], g.tenant_session)
+                if not success:
+                    flash(f"Equipo creado, pero hubo errores cargando detalles: {msg}", "warning")
+                else:
+                    flash(f"Equipo {new_device.hostname} importado correctamente con todos los objetos.", "success")
+                
+                # Manual commit is handled by caller or we can commit here? 
+                # ConfigLoader commits? No, it uses session provided. 
+                # ConfigLoader says session.commit() at end. 
+                # If we pass g.tenant_session, it commits.
+                # So we don't need to commit again unless we did more changes.
+                
+                # Existing code continued to commit at line 174. 
+                # If loader committed, line 174 is fine (empty handling).
+                # But wait, ConfigLoader commits. 
+                # Let's check ConfigLoader source. 
+                # Yes, "session.commit()".
+                # So we are good.
                 
                 g.tenant_session.commit()
                 flash(f"Equipo {new_device.hostname} importado correctamente con detalles.", "success")
@@ -158,7 +178,13 @@ def view_device(device_id):
     # Since session is open, relationships like device.site should load.
     
     vdoms = g.tenant_session.query(VDOM).filter_by(device_id=device.id).all()
-    sites = g.tenant_session.query(Site).all()
+    # Sites from Main DB
+    sites = db.session.query(Site).all()
+    
+    # Annotate single device
+    site_map = {s.id: s for s in sites}
+    device.site = site_map.get(device.site_id)
+    
     return render_template('admin/devices/view.html', device=device, vdoms=vdoms, sites=sites)
 
 @device_bp.route('/admin/devices/delete/<uuid:device_id>', methods=['POST'])
@@ -547,18 +573,20 @@ def apply_config_update(device_id):
         device.raw_config = pending['raw_config']
         device.hostname = pending.get('hostname') or device.hostname
         
-        # Update HA status
+        # Update HA status (Loader doesn't handle Device-level props yet)
         ha_info = pending['config_data'].get('ha', {})
         device.ha_habilitado = ha_info.get('enabled', False)
         
-        # Sync VDOMs
-        if pending['config_data'].get('vdoms'):
-            existing_vdoms = g.tenant_session.query(VDOM).filter_by(device_id=device.id).all()
-            existing_names = {v.name for v in existing_vdoms}
-            for v_name in pending['config_data']['vdoms']:
-                if v_name not in existing_names:
-                    new_vdom = VDOM(device_id=device.id, name=v_name, comments="Imported from Config Update")
-                    g.tenant_session.add(new_vdom)
+        # INTEGRATION: Use ConfigLoaderService to sync all objects
+        # This brings in the Interfaces, Maps, Policies, etc.
+        ConfigLoaderService.load_config(device.id, pending['config_data'], g.tenant_session)
+        
+        # ConfigLoader commits, but we might have pending changes on `device` object above?
+        # g.tenant_session.commit() # ConfigLoader does commit. 
+        # But `device` is attached to session. If we modified device attributes, 
+        # ConfigLoader's commit should verify/flush them too if they are in same session.
+        # Yes, standard SQLAlchemy behavior.
+
         
         g.tenant_session.commit()
         

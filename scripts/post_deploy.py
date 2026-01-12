@@ -72,6 +72,17 @@ def migrate_database(db_uri, db_name):
                 conn.commit()
             print(f"    ✓ config_history table created")
             migrations_applied += 1
+
+        # Migration 4: Add status column to policies (v1.3.1)
+        if 'policies' in tables:
+            policy_cols = [c['name'] for c in inspector.get_columns('policies')]
+            if 'status' not in policy_cols:
+                print(f"    [+] Adding status column to policies...")
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE policies ADD COLUMN status VARCHAR(20) DEFAULT 'enable'"))
+                    conn.commit()
+                print(f"    ✓ policies.status added")
+                migrations_applied += 1
         
         return migrations_applied
         

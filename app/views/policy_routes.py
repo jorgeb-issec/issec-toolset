@@ -37,6 +37,12 @@ def before_request():
 @product_required('policy_explorer')
 def import_policies():
     equipos = g.tenant_session.query(Equipo).all()
+    # Annotate sites manually
+    sites = db.session.query(Site).all()
+    site_map = {s.id: s for s in sites}
+    for e in equipos:
+        e.site = site_map.get(e.site_id)
+        
     if request.method == 'POST':
         device_id = request.form.get('device_id')
         vdom = request.form.get('vdom', 'root')
@@ -308,7 +314,7 @@ def list_policies():
     f_show_nat = request.args.get('show_nat') == 'on'
 
     # --- 3. QUERY ---
-    query = g.tenant_session.query(Policy).join(Equipo).join(Site)
+    query = g.tenant_session.query(Policy).join(Equipo)
 
     if f_device: query = query.filter(Policy.device_id == f_device)
     if f_vdom: query = query.filter(Policy.vdom == f_vdom)
@@ -430,7 +436,22 @@ def list_policies():
                 duplicate_groups[group_key] = []
             duplicate_groups[group_key].append(p)
     
+            duplicate_groups[group_key].append(p)
+    
     equipos = g.tenant_session.query(Equipo).all()
+    
+    # Annotate sites manually
+    sites = db.session.query(Site).all()
+    site_map = {s.id: s for s in sites}
+    
+    # Annotate equipos for filters
+    for e in equipos:
+        e.site = site_map.get(e.site_id)
+        
+    # Annotate policies in current page
+    for p in items:
+        if p.equipo and p.equipo.site_id:
+             p.equipo.site = site_map.get(p.equipo.site_id)
     
     # Get Unique VDOMs for Dropdown
     vdoms_query = g.tenant_session.query(Policy.vdom).distinct().order_by(Policy.vdom).all()

@@ -20,6 +20,13 @@ report_bp = Blueprint('report', __name__, url_prefix='/reports')
 @company_required
 def index():
     equipos = g.tenant_session.query(Equipo).all()
+    # Annotate sites manually
+    from app.models.site import Site
+    sites = db.session.query(Site).all()
+    site_map = {s.id: s for s in sites}
+    for e in equipos:
+        e.site = site_map.get(e.site_id)
+        
     return render_template('reports/index.html', equipos=equipos)
 
 @report_bp.route('/generate', methods=['POST'])
