@@ -28,6 +28,8 @@ import io
 import os
 
 
+from app.extensions.cache import cache
+
 # ============================================================
 # OPTIMIZED: Unified Dashboard Endpoint
 # Consolidates multiple API calls into one
@@ -36,6 +38,7 @@ import os
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
+@cache.cached(timeout=30, query_string=True, key_prefix=lambda: f"dashboard_stats_{session.get('company_id')}_{request.args.get('device_id', 'all')}")
 def api_dashboard_stats():
     """
     Unified dashboard endpoint - returns all data needed for initial load

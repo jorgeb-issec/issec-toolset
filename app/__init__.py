@@ -17,6 +17,9 @@ def create_app(config_class=Config):
     db.init_app(app)
     login_manager.init_app(app)
     migrate.init_app(app, db)
+    
+    from app.extensions.cache import cache
+    cache.init_app(app)
 
     # Registrar Blueprints
     from app.models import core # Register core models

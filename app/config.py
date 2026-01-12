@@ -12,3 +12,8 @@ class Config:
         "pool_pre_ping": True,
         "pool_recycle": 300,
     }
+    
+    # Caching
+    CACHE_TYPE = 'RedisCache' if os.environ.get('REDIS_URL') else 'SimpleCache'
+    CACHE_REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+    CACHE_DEFAULT_TIMEOUT = 300
