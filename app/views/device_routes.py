@@ -17,9 +17,9 @@ device_bp = Blueprint('device', __name__)
 @login_required
 @company_required
 def list_devices():
-    devices = g.tenant_session.query(Equipo).all()
-    # Annotate sites manually
-    sites = db.session.query(Site).all()
+    # OPTIMIZED: Limit queries
+    devices = g.tenant_session.query(Equipo).order_by(Equipo.nombre).limit(200).all()
+    sites = db.session.query(Site).limit(100).all()
     site_map = {s.id: s for s in sites}
     for d in devices:
         d.site = site_map.get(d.site_id)

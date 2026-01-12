@@ -36,9 +36,9 @@ def before_request():
 @company_required
 @product_required('policy_explorer')
 def import_policies():
-    equipos = g.tenant_session.query(Equipo).all()
-    # Annotate sites manually
-    sites = db.session.query(Site).all()
+    # OPTIMIZED: Limit queries for dropdowns
+    equipos = g.tenant_session.query(Equipo).order_by(Equipo.nombre).limit(200).all()
+    sites = db.session.query(Site).limit(100).all()
     site_map = {s.id: s for s in sites}
     for e in equipos:
         e.site = site_map.get(e.site_id)
@@ -438,10 +438,11 @@ def list_policies():
     
             duplicate_groups[group_key].append(p)
     
-    equipos = g.tenant_session.query(Equipo).all()
+    # OPTIMIZED: Limit queries for dropdowns
+    equipos = g.tenant_session.query(Equipo).order_by(Equipo.nombre).limit(200).all()
     
-    # Annotate sites manually
-    sites = db.session.query(Site).all()
+    # Annotate sites manually (limit for performance)
+    sites = db.session.query(Site).limit(100).all()
     site_map = {s.id: s for s in sites}
     
     # Annotate equipos for filters
@@ -453,8 +454,8 @@ def list_policies():
         if p.equipo and p.equipo.site_id:
              p.equipo.site = site_map.get(p.equipo.site_id)
     
-    # Get Unique VDOMs for Dropdown
-    vdoms_query = g.tenant_session.query(Policy.vdom).distinct().order_by(Policy.vdom).all()
+    # Get Unique VDOMs for Dropdown (OPTIMIZED: limit to 100)
+    vdoms_query = g.tenant_session.query(Policy.vdom).distinct().order_by(Policy.vdom).limit(100).all()
     distinct_vdoms = [r[0] for r in vdoms_query if r[0]]
 
     args_limpios = request.args.copy()

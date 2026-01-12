@@ -85,7 +85,7 @@
                 <div class="col-auto d-flex align-items-center">
                     <label class="small fw-bold text-muted me-2"><i class="bi bi-hdd-network"></i> Dispositivo:</label>
                     <select class="form-select form-select-sm" name="device_id" id="global-device-select"
-                        style="min-width: 200px;" onchange="currentPage=1; loadLogs();">
+                        style="min-width: 200px;" onchange="currentPage=1; loadStats(); if(explorerLoaded) loadLogs();">
                         <option value="">Todos los Equipos</option>
                         {% for d in devices %}
                         <option value="{{ d.id }}">{{ d.nombre }}</option>
@@ -96,10 +96,9 @@
                     <div class="input-group input-group-sm">
                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
                         <input type="text" class="form-control border-start-0" name="search" id="global-search-input"
-                            placeholder="Buscar IP, usuario, política..."
-                            onkeyup="if(event.key === 'Enter') { currentPage=1; loadLogs(); }">
+                            placeholder="Buscar IP, usuario, política...">
                         <button type="button" class="btn btn-primary"
-                            onclick="currentPage=1; loadLogs()">Filtrar</button>
+                            onclick="currentPage=1; if(explorerLoaded) loadLogs();">Filtrar</button>
                     </div>
                 </div>
             </form>
@@ -602,6 +601,19 @@
     let currentPage = 1;
     let currentPerPage = 32;
 
+    // === OPTIMIZATION: Debounce utility ===
+    let searchDebounceTimer = null;
+    function debounce(func, delay = 300) {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(func, delay);
+    }
+
+    // === OPTIMIZATION: Lazy loading flags for tabs ===
+    let topologyLoaded = false;
+    let staticAuditLoaded = false;
+    let dynamicAuditLoaded = false;
+    let explorerLoaded = false;
+
     // Helper for API Calls
     async function apiCall(endpoint, method = 'GET', body = null) {
         const headers = {
@@ -626,18 +638,51 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        loadLogs();
-        loadStats();  // Load statistics for cards
-        loadRecommendations();
-        // loadImportHistory(); // TODO: Implement import history
+        // === OPTIMIZATION: Only load essential data on init ===
+        loadStats();  // Load statistics for cards (fast, essential)
+        // Logs and recommendations load via tab activation
 
-        // Remove old filter-form listener, use global inputs onchange/onclick
-        // Listeners for global inputs are added inline or can be added here
+        // === OPTIMIZATION: Lazy tab loading ===
+        document.getElementById('explorer-tab').addEventListener('shown.bs.tab', () => {
+            if (!explorerLoaded) {
+                loadLogs();
+                explorerLoaded = true;
+            }
+        });
+
+        document.getElementById('static-audit-tab').addEventListener('shown.bs.tab', () => {
+            if (!staticAuditLoaded) {
+                loadRecommendations('static');
+                staticAuditLoaded = true;
+            }
+        });
+
+        document.getElementById('dynamic-audit-tab').addEventListener('shown.bs.tab', () => {
+            if (!dynamicAuditLoaded) {
+                loadRecommendations('dynamic');
+                dynamicAuditLoaded = true;
+            }
+        });
+
+        document.getElementById('topology-tab').addEventListener('shown.bs.tab', () => {
+            if (!topologyLoaded) {
+                loadTopology();
+                topologyLoaded = true;
+            }
+        });
+
+        // === Debounced search handler ===
+        document.getElementById('global-search-input').addEventListener('input', () => {
+            debounce(() => {
+                currentPage = 1;
+                if (explorerLoaded) loadLogs();
+            }, 400);
+        });
 
         document.getElementById('global-filter-form').addEventListener('submit', (e) => {
             e.preventDefault();
             currentPage = 1;
-            loadLogs();
+            if (explorerLoaded) loadLogs();
         });
 
         document.getElementById('import-form').addEventListener('submit', async (e) => {
@@ -793,32 +838,32 @@
 
     async function loadStats() {
         try {
-            // Get Filters GLOBALLY for consistent stats
+            // === OPTIMIZED: Use unified dashboard endpoint ===
             const deviceId = document.getElementById('global-device-select').value;
-            let url = '/analyzer/stats';
+            let url = '/analyzer/dashboard';
             if (deviceId) {
                 url += `?device_id=${deviceId}`;
             }
 
             const data = await apiCall(url);
             if (data.success && data.data) {
-                const stats = data.data;
+                const { stats, recommendation_count } = data.data;
 
                 // Total logs
                 document.getElementById('stat-total-logs').textContent =
                     stats.total_logs?.toLocaleString() || '0';
 
-                // Threats (deny, block, dropped actions)
-                const threats = (stats.by_action?.deny || 0) +
-                    (stats.by_action?.blocked || 0) +
-                    (stats.by_action?.dropped || 0);
+                // Threats (pre-calculated on server)
                 document.getElementById('stat-threats').textContent =
-                    threats.toLocaleString();
+                    stats.threats?.toLocaleString() || '0';
 
-                // Accepted
-                const accepted = stats.by_action?.accept || 0;
+                // Accepted (pre-calculated on server)
                 document.getElementById('stat-accepted').textContent =
-                    accepted.toLocaleString();
+                    stats.accepted?.toLocaleString() || '0';
+
+                // Recommendation count (from same response)
+                document.getElementById('stat-recommendations').textContent =
+                    recommendation_count?.toLocaleString() || '0';
 
                 // Populate Breakdown
                 const breakdownContainer = document.getElementById('actions-breakdown');
@@ -845,22 +890,8 @@
                     });
                 }
             }
-
-            // Also load recommendation count
-            try {
-                const recData = await apiCall('/analyzer/recommendations?per_page=1');
-                if (recData.success && recData.pagination) {
-                    document.getElementById('stat-recommendations').textContent =
-                        (recData.pagination.total || 0).toLocaleString();
-                } else if (recData.success && recData.data) {
-                    document.getElementById('stat-recommendations').textContent =
-                        recData.data.length.toString();
-                }
-            } catch (e) {
-                document.getElementById('stat-recommendations').textContent = '0';
-            }
         } catch (error) {
-            console.error('Error loading stats:', error);
+            console.error('Error loading dashboard stats:', error);
         }
     }
 

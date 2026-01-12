@@ -19,10 +19,10 @@ report_bp = Blueprint('report', __name__, url_prefix='/reports')
 @login_required
 @company_required
 def index():
-    equipos = g.tenant_session.query(Equipo).all()
-    # Annotate sites manually
+    # OPTIMIZED: Limit queries for dropdowns
+    equipos = g.tenant_session.query(Equipo).order_by(Equipo.nombre).limit(200).all()
     from app.models.site import Site
-    sites = db.session.query(Site).all()
+    sites = db.session.query(Site).limit(100).all()
     site_map = {s.id: s for s in sites}
     for e in equipos:
         e.site = site_map.get(e.site_id)

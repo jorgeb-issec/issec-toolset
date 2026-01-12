@@ -28,6 +28,90 @@ import io
 import os
 
 
+# ============================================================
+# OPTIMIZED: Unified Dashboard Endpoint
+# Consolidates multiple API calls into one
+# ============================================================
+@api_v1_bp.route('/analyzer/dashboard', methods=['GET'])
+@api_login_required
+@api_company_required
+@api_product_required('log_analyzer')
+def api_dashboard_stats():
+    """
+    Unified dashboard endpoint - returns all data needed for initial load
+    
+    Query Parameters:
+        device_id (uuid): Optional filter by device
+    
+    Returns:
+        JSON with:
+        - stats: total logs, by_action breakdown
+        - devices: list for dropdown (limited)
+        - recommendation_count: total open recommendations
+    """
+    from sqlalchemy import case
+    
+    device_id = request.args.get('device_id')
+    filters = []
+    if device_id:
+        filters.append(LogEntry.device_id == device_id)
+    
+    # === Single transaction for all queries ===
+    try:
+        # 1. Total logs count
+        total_query = g.tenant_session.query(func.count(LogEntry.id))
+        if filters:
+            total_query = total_query.filter(*filters)
+        total_logs = total_query.scalar() or 0
+        
+        # 2. Action stats (consolidated query with CASE)
+        action_query = g.tenant_session.query(
+            LogEntry.action,
+            func.count(LogEntry.id).label('count')
+        )
+        if filters:
+            action_query = action_query.filter(*filters)
+        action_stats = action_query.group_by(LogEntry.action).all()
+        by_action = {r[0]: r[1] for r in action_stats if r[0]}
+        
+        # Calculate threats and accepted
+        threats = sum(by_action.get(a, 0) for a in ['deny', 'blocked', 'dropped', 'server-rst'])
+        accepted = by_action.get('accept', 0)
+        
+        # 3. Devices for dropdown (limited, from cache if available)
+        devices = g.tenant_session.query(
+            Equipo.id, Equipo.nombre, Equipo.hostname
+        ).order_by(Equipo.nombre).limit(100).all()
+        device_list = [
+            {'id': str(d.id), 'name': d.hostname or d.nombre}
+            for d in devices
+        ]
+        
+        # 4. Recommendation count (quick count query)
+        rec_count = g.tenant_session.query(func.count(SecurityRecommendation.id))\
+            .filter(SecurityRecommendation.status == 'open')\
+            .scalar() or 0
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'stats': {
+                    'total_logs': total_logs,
+                    'threats': threats,
+                    'accepted': accepted,
+                    'by_action': by_action
+                },
+                'devices': device_list,
+                'recommendation_count': rec_count
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @api_v1_bp.route('/analyzer', methods=['GET'])
 @api_login_required
 @api_company_required
