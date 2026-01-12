@@ -10,6 +10,9 @@ from app.api.v1 import api_v1_bp
 from app.models.log_entry import LogEntry, LogImportSession
 from app.models.security_recommendation import SecurityRecommendation
 from app.models.equipo import Equipo
+from app.models.site import Site
+from app.models.vdom import VDOM
+from app.models.interface import Interface
 from app.decorators import api_login_required, api_company_required, api_product_required
 from app.extensions.db import db
 from app.services.log_parser import FortiLogParser, LogAnalyzer
@@ -25,7 +28,7 @@ import io
 import os
 
 
-@api_v1_bp.route('/logs', methods=['GET'])
+@api_v1_bp.route('/analyzer', methods=['GET'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -134,7 +137,7 @@ def api_list_logs():
     })
 
 
-@api_v1_bp.route('/logs/<uuid:log_id>', methods=['GET'])
+@api_v1_bp.route('/analyzer/<uuid:log_id>', methods=['GET'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -155,7 +158,7 @@ def api_get_log(log_id):
     })
 
 
-@api_v1_bp.route('/logs/import', methods=['POST'])
+@api_v1_bp.route('/analyzer/import', methods=['POST'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -389,7 +392,7 @@ def api_import_logs():
         }), 500
 
 
-@api_v1_bp.route('/logs/stats', methods=['GET'])
+@api_v1_bp.route('/analyzer/stats', methods=['GET'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -549,7 +552,7 @@ def api_log_stats():
     })
 
 
-@api_v1_bp.route('/logs/recommendations', methods=['GET'])
+@api_v1_bp.route('/analyzer/recommendations', methods=['GET'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -647,7 +650,7 @@ def api_list_recommendations():
     })
 
 
-@api_v1_bp.route('/logs/analyze/topology', methods=['POST'])
+@api_v1_bp.route('/analyzer/analyze/topology', methods=['POST'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -799,6 +802,7 @@ end"""
                 cli_remediation=cli
             )
             g.tenant_session.add(rec)
+            recommendations_created += 1
             recommendations_created += 1
 
         # 2. AUDIT EXISTING POLICIES: FIND "ANY/ALL" RULES AND SUGGEST RESTRICTIONS
@@ -1349,7 +1353,7 @@ def api_run_ai_analysis():
     })
 
 
-@api_v1_bp.route('/logs/audit/static', methods=['POST'])
+@api_v1_bp.route('/analyzer/audit/static', methods=['POST'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -1404,7 +1408,7 @@ def api_run_static_audit():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@api_v1_bp.route('/logs/audit/dynamic', methods=['POST'])
+@api_v1_bp.route('/analyzer/audit/dynamic', methods=['POST'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -1439,7 +1443,7 @@ def api_run_dynamic_audit():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@api_v1_bp.route('/logs/recommendations/<uuid:rec_id>', methods=['PATCH'])
+@api_v1_bp.route('/analyzer/recommendations/<uuid:rec_id>', methods=['PATCH'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -1467,7 +1471,7 @@ def api_update_recommendation(rec_id):
     return jsonify({'success': True})
 
 
-@api_v1_bp.route('/logs', methods=['DELETE'])
+@api_v1_bp.route('/analyzer', methods=['DELETE'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -1502,7 +1506,7 @@ def api_delete_logs():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@api_v1_bp.route('/logs/recommendations', methods=['DELETE'])
+@api_v1_bp.route('/analyzer/recommendations', methods=['DELETE'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -1560,7 +1564,7 @@ def api_update_recommendation(rec_id):
     })
 
 
-@api_v1_bp.route('/logs/import-sessions', methods=['GET'])
+@api_v1_bp.route('/analyzer/import-sessions', methods=['GET'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -1630,7 +1634,7 @@ def serialize_log(log: LogEntry) -> dict:
 # Configuration Endpoints
 # ============================================================
 
-@api_v1_bp.route('/logs/config', methods=['GET'])
+@api_v1_bp.route('/analyzer/config', methods=['GET'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -1667,7 +1671,7 @@ def api_get_config():
     })
 
 
-@api_v1_bp.route('/logs/config', methods=['POST'])
+@api_v1_bp.route('/analyzer/config', methods=['POST'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -1728,7 +1732,7 @@ def api_save_config():
         }), 500
 
 
-@api_v1_bp.route('/logs/recommendations/export', methods=['POST'])
+@api_v1_bp.route('/analyzer/recommendations/export', methods=['POST'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -1835,7 +1839,7 @@ def api_export_recommendations():
     return output
 
 
-@api_v1_bp.route('/logs/topology', methods=['POST'])
+@api_v1_bp.route('/analyzer/topology', methods=['POST'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')
@@ -1865,7 +1869,7 @@ def api_save_topology():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@api_v1_bp.route('/logs/topology', methods=['GET'])
+@api_v1_bp.route('/analyzer/topology', methods=['GET'])
 @api_login_required
 @api_company_required
 @api_product_required('log_analyzer')

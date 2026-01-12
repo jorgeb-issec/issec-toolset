@@ -23,30 +23,62 @@ class StaticAnalyzer:
         # Convert DB objects to dict format expected by analyzer
         policy_dicts = []
         for p in policies:
-            policy_dicts.append(StaticAnalyzer._policy_to_dict(p))
+            policy_dicts.append(StaticAnalyzer._policy_to_dict(p, session))
             
         return StaticAnalyzer.analyze_policies(policy_dicts)
 
     @staticmethod
-    def _policy_to_dict(policy: Policy) -> Dict[str, Any]:
+    def _policy_to_dict(policy: Policy, session=None) -> Dict[str, Any]:
         """
         Convert Policy DB object to dictionary with resolved names
         """
-        # Fetch Mappings
-        # Interfaces
-        src_intfs = [m.interface.name for m in policy.interface_mappings.filter_by(direction='src').all()]
-        dst_intfs = [m.interface.name for m in policy.interface_mappings.filter_by(direction='dst').all()]
+        # Fetch Mappings (with graceful fallback if tables don't exist)
+        src_intfs = []
+        dst_intfs = []
+        src_addrs = []
+        dst_addrs = []
+        services = []
         
-        # Addresses
-        src_addrs = [m.address.name for m in policy.address_mappings.filter_by(direction='src').all()]
-        dst_addrs = [m.address.name for m in policy.address_mappings.filter_by(direction='dst').all()]
+        try:
+            # Try to use interface mappings if table exists
+            src_intfs = [m.interface.name for m in policy.interface_mappings.filter_by(direction='src').all()]
+            dst_intfs = [m.interface.name for m in policy.interface_mappings.filter_by(direction='dst').all()]
+        except Exception as e:
+            # Table doesn't exist yet - rollback the failed transaction
+            if session:
+                session.rollback()
+            pass
         
-        # Services
-        services = [m.service.name for m in policy.service_mappings.all()]
+        try:
+            # Try to use address mappings if table exists
+            src_addrs = [m.address.name for m in policy.address_mappings.filter_by(direction='src').all()]
+            dst_addrs = [m.address.name for m in policy.address_mappings.filter_by(direction='dst').all()]
+        except Exception as e:
+            # Table doesn't exist yet - rollback the failed transaction
+            if session:
+                session.rollback()
+            pass
         
-        # Fallback to text fields if mappings are empty (e.g. legacy/error)
-        if not src_addrs and policy.src_addr: src_addrs = [policy.src_addr] 
-        # (Assuming src_addr stores generic text if mapping failed, though loader tries to map)
+        try:
+            # Try to use service mappings if table exists
+            services = [m.service.name for m in policy.service_mappings.all()]
+        except Exception as e:
+            # Table doesn't exist yet - rollback the failed transaction
+            if session:
+                session.rollback()
+            pass
+        
+        # Fallback to text fields if mappings are empty (legacy or table missing)
+        if not src_intfs and policy.src_intf:
+            src_intfs = [policy.src_intf]
+        if not dst_intfs and policy.dst_intf:
+            dst_intfs = [policy.dst_intf]
+        if not src_addrs and policy.src_addr:
+            src_addrs = [policy.src_addr]
+        if not dst_addrs and policy.dst_addr:
+            dst_addrs = [policy.dst_addr]
+        if not services and policy.service:
+            services = [policy.service]
         
         return {
             'policy_id': policy.policy_id,
@@ -55,11 +87,11 @@ class StaticAnalyzer:
             'action': policy.action,
             'status': policy.status,
             'vdom': policy.vdom,
-            'srcintf': src_intfs if src_intfs else [policy.src_intf], # Fallback
-            'dstintf': dst_intfs if dst_intfs else [policy.dst_intf],
+            'srcintf': src_intfs,
+            'dstintf': dst_intfs,
             'srcaddr': src_addrs,
             'dstaddr': dst_addrs,
-            'service': services if services else [policy.service]
+            'service': services
         }
 
     

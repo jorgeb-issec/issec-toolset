@@ -596,7 +596,8 @@
     // Helper for API Calls
     async function apiCall(endpoint, method = 'GET', body = null) {
         const headers = {
-            'Authorization': `Bearer ${API_TOKEN}`
+            'Authorization': `Bearer ${API_TOKEN}`,
+            'Accept': 'application/json'
         };
         // Do not set Content-Type if Body is FormData (it sets it automatically with boundary)
         if (body && !(body instanceof FormData)) {

@@ -28,7 +28,7 @@ def create_app(config_class=Config):
     from app.views.user_role_routes import user_role_bp
     from app.views.device_routes import device_bp
     from app.views.history_routes import history_bp
-    from app.views.log_routes import log_bp
+    from app.views.analyzer_routes import analyzer_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(role_bp)
@@ -40,7 +40,7 @@ def create_app(config_class=Config):
     app.register_blueprint(device_bp)
     app.register_blueprint(report_bp)
     app.register_blueprint(history_bp)
-    app.register_blueprint(log_bp)
+    app.register_blueprint(analyzer_bp)
 
     # Register API v1 Blueprint
     from app.api.v1 import api_v1_bp
