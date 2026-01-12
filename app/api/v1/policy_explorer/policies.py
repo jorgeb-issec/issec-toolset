@@ -198,7 +198,7 @@ def api_list_policies():
         site_map = {}
         if site_ids:
              # Use main db session
-             sites = db.session.query(Site).filter(Site.id.in_(site_ids)).all()
+             sites = g.tenant_session.query(Site).filter(Site.id.in_(site_ids)).all()
              site_map = {s.id: s.nombre for s in sites}
 
         # Serialize policies
@@ -253,7 +253,7 @@ def api_get_policy(policy_uuid):
     # Fetch site name for this single policy
     site_map = {}
     if policy.equipo and policy.equipo.site_id:
-        s = db.session.query(Site).filter(Site.id == policy.equipo.site_id).first()
+        s = g.tenant_session.query(Site).filter(Site.id == policy.equipo.site_id).first()
         if s:
             site_map[policy.equipo.site_id] = s.nombre
 

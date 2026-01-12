@@ -38,7 +38,7 @@ def before_request():
 def import_policies():
     # OPTIMIZED: Limit queries for dropdowns
     equipos = g.tenant_session.query(Equipo).order_by(Equipo.nombre).limit(200).all()
-    sites = db.session.query(Site).limit(100).all()
+    sites = g.tenant_session.query(Site).limit(100).all()
     site_map = {s.id: s for s in sites}
     for e in equipos:
         e.site = site_map.get(e.site_id)
@@ -442,7 +442,7 @@ def list_policies():
     equipos = g.tenant_session.query(Equipo).order_by(Equipo.nombre).limit(200).all()
     
     # Annotate sites manually (limit for performance)
-    sites = db.session.query(Site).limit(100).all()
+    sites = g.tenant_session.query(Site).limit(100).all()
     site_map = {s.id: s for s in sites}
     
     # Annotate equipos for filters

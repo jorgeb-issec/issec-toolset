@@ -15,7 +15,7 @@ def list_equipos():
     # Annotate sites manually (Main DB)
     from app.extensions.db import db
     from app.models.site import Site
-    sites = db.session.query(Site).all()
+    sites = g.tenant_session.query(Site).all()
     site_map = {s.id: s for s in sites}
     for e in equipos:
         e.site = site_map.get(e.site_id)
@@ -27,7 +27,7 @@ def list_equipos():
 @company_required
 def create_equipo():
     # 1. Traemos los sitios del Tenant (Ahora Main DB)
-    sites = db.session.query(Site).all()
+    sites = g.tenant_session.query(Site).all()
     
     if request.method == 'POST':
         try:

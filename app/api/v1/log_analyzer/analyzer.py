@@ -1868,7 +1868,7 @@ def api_save_topology():
         
     try:
         # Site is in Main DB
-        site = db.session.query(Site).filter(Site.id == site_id).first()
+        site = g.tenant_session.query(Site).filter(Site.id == site_id).first()
         if not site:
             return jsonify({'success': False, 'error': 'Site not found'}), 404
             
@@ -1905,7 +1905,7 @@ def api_get_topology():
         # 0. Check for Saved Data if requested
         if mode == 'saved' and site_id:
             # Site is in Main DB
-            site = db.session.query(Site).filter(Site.id == site_id).first()
+            site = g.tenant_session.query(Site).filter(Site.id == site_id).first()
             if site and site.topology_data:
                 return jsonify({
                     'success': True, 
@@ -1918,7 +1918,7 @@ def api_get_topology():
         # DYNAMIC GENERATION
         
         # 1. Fetch Sites (Main DB)
-        sites_query = db.session.query(Site)
+        sites_query = g.tenant_session.query(Site)
         if site_id:
             sites_query = sites_query.filter(Site.id == site_id)
         sites = sites_query.all()

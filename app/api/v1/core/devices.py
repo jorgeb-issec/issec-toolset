@@ -45,7 +45,7 @@ def api_list_devices():
     if devices:
         distinct_site_ids = list(set([d.site_id for d in devices if d.site_id]))
         if distinct_site_ids:
-            sites = db.session.query(Site).filter(Site.id.in_(distinct_site_ids)).all()
+            sites = g.tenant_session.query(Site).filter(Site.id.in_(distinct_site_ids)).all()
             site_names = {s.id: s.nombre for s in sites}
     
     data = []
@@ -86,7 +86,7 @@ def api_get_device(device_id):
     # Enrich site name individually
     from app.models.site import Site
     if device.site_id:
-        site = db.session.query(Site).filter(Site.id == device.site_id).first()
+        site = g.tenant_session.query(Site).filter(Site.id == device.site_id).first()
         if site:
             data['site_name'] = site.nombre
             
@@ -392,7 +392,7 @@ def api_list_sites():
 
     # Fetch from Main DB
     from app.models.site import Site
-    sites = db.session.query(Site).all()
+    sites = g.tenant_session.query(Site).all()
     
     data = []
     for s in sites:

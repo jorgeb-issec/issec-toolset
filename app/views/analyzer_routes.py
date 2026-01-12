@@ -29,7 +29,7 @@ def index():
 
     # Get devices and sites for filter
     devices = g.tenant_session.query(Equipo).all()
-    sites = db.session.query(Site).all()
+    sites = g.tenant_session.query(Site).all()
     
     # Generate API Token for frontend JS
     token = current_user.encode_auth_token(current_app.config['SECRET_KEY'])

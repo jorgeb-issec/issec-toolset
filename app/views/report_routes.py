@@ -22,7 +22,7 @@ def index():
     # OPTIMIZED: Limit queries for dropdowns
     equipos = g.tenant_session.query(Equipo).order_by(Equipo.nombre).limit(200).all()
     from app.models.site import Site
-    sites = db.session.query(Site).limit(100).all()
+    sites = g.tenant_session.query(Site).limit(100).all()
     site_map = {s.id: s for s in sites}
     for e in equipos:
         e.site = site_map.get(e.site_id)

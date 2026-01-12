@@ -97,6 +97,56 @@ def fix_missing_vdom_id(engine):
         except Exception as e:
             print(f"     ! Error checking policy_history: {e}")
 
+def ensure_sites_table_and_migrate(engine):
+    """
+    1. Ensure 'sites' table exists in tenant DB.
+    2. Copy global sites to tenant DB to preserve relationships.
+    """
+    from app.models.site import Site
+    from app.extensions.db import db
+    
+    # 1. Ensure Table Exists
+    # We use SQLAlchemy's metadata to create the table if missing
+    # Since Site is bound to Main DB metadata, we strictly use the Table object for creation on this engine
+    try:
+        Site.__table__.create(engine, checkfirst=True)
+        print("     + Verified 'sites' table exists")
+    except Exception as e:
+        print(f"     ! Error ensuring 'sites' table: {e}")
+        
+    # 2. Migrate Global Sites
+    # We fetch all global sites and insert them into the tenant DB if not present
+    # This ensures existing 'site_id' FKs in Equipos remain valid
+    try:
+        global_sites = db.session.query(Site).all()
+        if not global_sites:
+             print("     . No global sites to migrate")
+             return
+
+        with engine.connect() as conn:
+            print(f"     + Migrating {len(global_sites)} global sites...")
+            for s in global_sites:
+                # Raw SQL insert to avoid session conflicts
+                # Check existance first
+                check = conn.execute(sa.text(f"SELECT 1 FROM sites WHERE id = '{s.id}'")).fetchone()
+                if not check:
+                    try:
+                        sql = sa.text("""
+                            INSERT INTO sites (id, nombre, direccion, topology_data)
+                            VALUES (:id, :nombre, :direccion, :topology_data)
+                        """)
+                        conn.execute(sql, {
+                            "id": s.id,
+                            "nombre": s.nombre,
+                            "direccion": s.direccion,
+                            "topology_data": s.topology_data if s.topology_data else None # JSONB
+                        })
+                    except Exception as ex: # Likely duplicate name but different ID?
+                         print(f"       ~ Skipped site {s.nombre} (conflict: {ex})")
+            conn.commit()
+    except Exception as e:
+        print(f"     ! Error migrating sites: {e}")
+
 def main():
     app = create_app()
     with app.app_context():
@@ -110,6 +160,8 @@ def main():
             
             try:
                 engine = TenantService.get_engine(company.id)
+                # 0. Ensure Sites & Migrate
+                ensure_sites_table_and_migrate(engine)
                 # 1. Apply Indices
                 apply_indices(engine)
                 # 2. Fix Schema

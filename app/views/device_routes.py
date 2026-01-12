@@ -19,7 +19,7 @@ device_bp = Blueprint('device', __name__)
 def list_devices():
     # OPTIMIZED: Limit queries
     devices = g.tenant_session.query(Equipo).order_by(Equipo.nombre).limit(200).all()
-    sites = db.session.query(Site).limit(100).all()
+    sites = g.tenant_session.query(Site).limit(100).all()
     site_map = {s.id: s for s in sites}
     for d in devices:
         d.site = site_map.get(d.site_id)
@@ -179,7 +179,7 @@ def view_device(device_id):
     
     vdoms = g.tenant_session.query(VDOM).filter_by(device_id=device.id).all()
     # Sites from Main DB
-    sites = db.session.query(Site).all()
+    sites = g.tenant_session.query(Site).all()
     
     # Annotate single device
     site_map = {s.id: s for s in sites}
