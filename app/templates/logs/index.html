@@ -641,7 +641,7 @@
             const formData = new FormData(e.target);
 
             try {
-                const result = await apiCall('/logs/import', 'POST', formData);
+                const result = await apiCall('/analyzer/import', 'POST', formData);
                 alert('Logs importados correctamente. Sesión: ' + result.import_session_id + '\nLogs: ' + result.log_count);
                 location.reload();
             } catch (error) {
@@ -664,7 +664,7 @@
             const deviceId = document.getElementById('global-device-select').value;
             const search = document.getElementById('global-search-input').value;
 
-            const url = `/logs?page=${currentPage}&per_page=${currentPerPage}&q=${encodeURIComponent(search)}&device_id=${deviceId}`;
+            const url = `/analyzer?page=${currentPage}&per_page=${currentPerPage}&q=${encodeURIComponent(search)}&device_id=${deviceId}`;
             const data = await apiCall(url);
 
             tbody.innerHTML = '';
@@ -729,7 +729,7 @@
         modal.show();
 
         try {
-            const data = await apiCall(`/logs/${logId}`);
+            const data = await apiCall(`/analyzer/${logId}`);
             if (data.success) {
                 const raw = data.data.raw_data || data.data;
                 content.textContent = JSON.stringify(raw, null, 2);
@@ -776,7 +776,7 @@
 
     async function loadStats() {
         try {
-            const data = await apiCall('/logs/stats');
+            const data = await apiCall('/analyzer/stats');
             if (data.success && data.data) {
                 const stats = data.data;
 
@@ -824,7 +824,7 @@
 
             // Also load recommendation count
             try {
-                const recData = await apiCall('/logs/recommendations?per_page=1');
+                const recData = await apiCall('/analyzer/recommendations?per_page=1');
                 if (recData.success && recData.pagination) {
                     document.getElementById('stat-recommendations').textContent =
                         (recData.pagination.total || 0).toLocaleString();
@@ -862,7 +862,7 @@
         };
 
         try {
-            const result = await apiCall('/logs/analyze', 'POST', JSON.stringify(params));
+            const result = await apiCall('/analyzer/analyze', 'POST', JSON.stringify(params));
             const recCount = result.recommendations_count || 0;
             const newPolicies = result.new_policies_count || 0;
             alert(`Análisis completado. Se generaron ${recCount} recomendaciones${newPolicies > 0 ? ` y ${newPolicies} nuevas políticas sugeridas` : ''}.`);
@@ -922,7 +922,7 @@
 
         try {
             // Load VDOMs from logs (distinct values)
-            const data = await apiCall(`/logs/stats?device_id=${deviceId}`);
+            const data = await apiCall(`/analyzer/stats?device_id=${deviceId}`);
             if (data.success && data.data.by_vdom) {
                 Object.keys(data.data.by_vdom).forEach(vdom => {
                     const opt = document.createElement('option');
@@ -944,10 +944,10 @@
 
         try {
             // Get unique interfaces from logs
-            const data = await apiCall(`/logs?device_id=${deviceId}&per_page=1`);
+            const data = await apiCall(`/analyzer?device_id=${deviceId}&per_page=1`);
             if (data.success) {
                 // Use stats to get interface breakdown
-                const statsData = await apiCall(`/logs/stats?device_id=${deviceId}`);
+                const statsData = await apiCall(`/analyzer/stats?device_id=${deviceId}`);
                 if (statsData.success && statsData.data.by_src_intf) {
                     Object.keys(statsData.data.by_src_intf).forEach(intf => {
                         const opt1 = document.createElement('option');
@@ -1010,7 +1010,7 @@
                 }
             };
 
-            const response = await fetch(`${API_BASE}/logs/recommendations/export`, {
+            const response = await fetch(`${API_BASE}/analyzer/recommendations/export`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${API_TOKEN}`,
@@ -1050,7 +1050,7 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analizando...';
 
         try {
-            await apiCall('/logs/audit/static', 'POST', JSON.stringify({ device_id: deviceId }));
+            await apiCall('/analyzer/audit/static', 'POST', JSON.stringify({ device_id: deviceId }));
             loadRecommendations('static');
         } catch (e) {
             alert('Error en auditoría estática: ' + e.message);
@@ -1073,7 +1073,7 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analizando...';
 
         try {
-            await apiCall('/logs/audit/dynamic', 'POST', JSON.stringify({ device_id: deviceId, days_back: 30 }));
+            await apiCall('/analyzer/audit/dynamic', 'POST', JSON.stringify({ device_id: deviceId, days_back: 30 }));
             loadRecommendations('dynamic');
         } catch (e) {
             alert('Error en auditoría dinámica: ' + e.message);
@@ -1108,7 +1108,7 @@
             // Get Device Filter
             const deviceId = document.getElementById('global-device-select').value;
 
-            let url = `/logs/recommendations?page=${recPage}&per_page=${recPerPage}`;
+            let url = `/analyzer/recommendations?page=${recPage}&per_page=${recPerPage}`;
             if (deviceId) url += `&device_id=${deviceId}`;
             if (categories.length > 0) url += `&category=${categories.join(',')}`;
 
@@ -1434,7 +1434,7 @@
     async function loadConfigStatus() {
         const statusBadge = document.getElementById('api-key-status');
         try {
-            const data = await apiCall('/logs/config');
+            const data = await apiCall('/analyzer/config');
             if (data.has_api_key) {
                 statusBadge.className = 'badge bg-success me-2';
                 statusBadge.textContent = 'Configurado';
@@ -1462,7 +1462,7 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
 
         try {
-            const response = await apiCall('/logs/config', 'POST', JSON.stringify({ gemini_api_key: apiKey }));
+            const response = await apiCall('/analyzer/config', 'POST', JSON.stringify({ gemini_api_key: apiKey }));
             alert('Configuración guardada correctamente');
             document.getElementById('gemini-api-key').value = '';
             loadConfigStatus();
@@ -1485,7 +1485,7 @@
 
         try {
             const deviceId = document.querySelector('select[name="device_id"]').value;
-            let url = '/logs';
+            let url = '/analyzer';
             if (deviceId) url += `?device_id=${deviceId}`;
 
             const btn = document.getElementById('actionsDropdown');
@@ -1516,7 +1516,7 @@
 
         try {
             const deviceId = document.querySelector('select[name="device_id"]').value;
-            let url = '/logs/recommendations';
+            let url = '/analyzer/recommendations';
             if (deviceId) url += `?device_id=${deviceId}`;
 
             const data = await apiCall(url, 'DELETE');
@@ -1544,7 +1544,7 @@
         container.innerHTML = '<div class="d-flex h-100 align-items-center justify-content-center"><div class="spinner-border text-primary"></div></div>';
 
         try {
-            const data = await apiCall(`/logs/topology?site_id=${siteId || ''}&mode=${mode}`);
+            const data = await apiCall(`/analyzer/topology?site_id=${siteId || ''}&mode=${mode}`);
 
             // Debug Output
             const debugPre = document.getElementById('topology-json-output');
@@ -1653,7 +1653,7 @@
                 }
             };
 
-            const response = await apiCall('/logs/topology', 'POST', JSON.stringify(payload));
+            const response = await apiCall('/analyzer/topology', 'POST', JSON.stringify(payload));
             if (response.success) {
                 alert("Topología guardada correctamente.");
             } else {
@@ -1773,7 +1773,7 @@
 
         try {
             // Filter specialized for "new_policy" category
-            const response = await apiCall('/logs/recommendations?category=new_policy');
+            const response = await apiCall('/analyzer/recommendations?category=new_policy');
             if (response.success && response.data && response.data.length > 0) {
                 let html = '<div class="row g-3">';
                 response.data.forEach(rec => {
@@ -1848,7 +1848,7 @@
         }
 
         try {
-            const response = await apiCall('/logs/analyze/topology', 'POST', JSON.stringify({ site_id: siteId }));
+            const response = await apiCall('/analyzer/analyze/topology', 'POST', JSON.stringify({ site_id: siteId }));
 
             if (response.success) {
                 // Refresh topology to show any new insights (e.g. if we add visual indicators later)

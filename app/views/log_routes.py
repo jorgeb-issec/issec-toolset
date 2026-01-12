@@ -12,7 +12,7 @@ from sqlalchemy import func, desc, or_
 import logging
 from datetime import datetime, timedelta
 
-log_bp = Blueprint('log_analytics', __name__, url_prefix='/logs')
+log_bp = Blueprint('log_analytics', __name__, url_prefix='/analyzer')
 
 logger = logging.getLogger(__name__)
 
