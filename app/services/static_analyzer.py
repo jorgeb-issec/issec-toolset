@@ -15,6 +15,10 @@ class StaticAnalyzer:
         """
         Analyze all policies for a given device stored in the database.
         """
+        import uuid as uuid_module
+        if isinstance(device_id, str):
+            device_id = uuid_module.UUID(device_id)
+        
         if not session:
             session = db.session
             

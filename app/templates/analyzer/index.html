@@ -166,44 +166,7 @@
                 </div>
             </div>
             <!-- Stats Cards will be here -->
-            <div class="row g-3 mb-4 mt-2">
-                <div class="col-md-3">
-                    <div class="card shadow-sm border-start border-primary border-4 h-100">
-                        <div class="card-body">
-                            <h6 class="text-muted text-uppercase small fw-bold">Total Logs</h6>
-                            <h3 class="mb-0 display-6 fw-bold" id="stats-total-logs">-</h3>
-                            <small class="text-muted"><i class="bi bi-clock"></i> Últimos 30 días</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card shadow-sm border-start border-danger border-4 h-100">
-                        <div class="card-body">
-                            <h6 class="text-muted text-uppercase small fw-bold">Amenazas / Bloqueos</h6>
-                            <h3 class="mb-0 display-6 fw-bold text-danger" id="stats-threats">-</h3>
-                            <small class="text-muted" id="stats-threats-label">Denied/Blocked</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card shadow-sm border-start border-warning border-4 h-100">
-                        <div class="card-body">
-                            <h6 class="text-muted text-uppercase small fw-bold">Recomendaciones</h6>
-                            <h3 class="mb-0 display-6 fw-bold text-warning" id="stats-recommendations">-</h3>
-                            <small class="text-muted">Pendientes</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card shadow-sm border-start border-info border-4 h-100">
-                        <div class="card-body">
-                            <h6 class="text-muted text-uppercase small fw-bold">Volumen Datos</h6>
-                            <h3 class="mb-0 display-6 fw-bold text-info" id="stats-volume">-</h3>
-                            <small class="text-muted">Procesados</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!-- Stats moved to global top bar -->
         </div>
 
         <!-- Static Audit Tab -->
@@ -1107,7 +1070,7 @@
             categories = ['optimize_policy', 'policy', 'security'];
         } else if (currentAuditTab === 'dynamic') {
             containerId = 'dynamic-audit-container';
-            categories = ['optimization', 'traffic', 'security', 'ai_security', 'ai_new_policy'];
+            categories = ['optimization', 'traffic', 'security', 'ai_security', 'ai_new_policy', 'vdom_audit'];
         } else {
             return; // Unknown tab
         }

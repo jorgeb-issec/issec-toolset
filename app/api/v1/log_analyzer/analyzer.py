@@ -805,148 +805,8 @@ end"""
             recommendations_created += 1
             recommendations_created += 1
 
-        # 2. AUDIT EXISTING POLICIES: FIND "ANY/ALL" RULES AND SUGGEST RESTRICTIONS
-        active_policies_count = 0 
-        
-        # Criteria for "Open Policy":
-        # - Action: ACCEPT
-        # - DstAddr: 'all' or '0.0.0.0/0' OR Service: 'ALL'
-        # - Not a default implicit deny (usually ID 0 deny, but we check action=ACCEPT)
-        
-        open_policies = g.tenant_session.query(Policy).filter(
-            Policy.device_id.in_(device_ids),
-            Policy.action == 'ACCEPT',
-            or_(
-                Policy.dst_addr.ilike('%all%'),
-                Policy.dst_addr.ilike('%0.0.0.0/0%'),
-                Policy.service.ilike('%ALL%'),
-                Policy.service.ilike('%ANY%')
-            )
-        ).all()
-        
-        current_app.logger.info(f"Audit: Found {len(open_policies)} potentially open policies.")
-        
-        for policy in open_policies:
-            # Analyze logs for this specific policy to see what it's actually doing
-            # We look for ACCEPT logs matching this policy ID
-            
-            # Aggregate usage by (Src, Dst, Service)
-            usage_patterns = g.tenant_session.query(
-                LogEntry.src_ip,
-                LogEntry.dst_ip,
-                LogEntry.service,
-                LogEntry.dst_port,
-                func.count(LogEntry.id).label('usage_count')
-            ).filter(
-                LogEntry.device_id == policy.device_id,
-                LogEntry.policy_id == policy.policy_id, # Link log to policy
-                LogEntry.action == 'accept',
-                LogEntry.timestamp >= cutoff
-            ).group_by(
-                LogEntry.src_ip, LogEntry.dst_ip, LogEntry.service, LogEntry.dst_port
-            ).order_by(desc('usage_count')).limit(20).all()
-            
-            if not usage_patterns:
-                # No traffic observed for this open policy? Suggest disabling it.
-                title = f'Política Abierta Sin Uso: ID {policy.policy_id}'
-                description = f'La política "{policy.name}" ({policy.policy_id}) permite tráfico amplio (ALL) pero no se han detectado logs en {days_back} días.'
-                recommendation = 'Deshabilitar o eliminar la política si no es necesaria.'
-                
-                cli = f"""config firewall policy
-    edit {policy.policy_id}
-        set status disable
-        set comments "Disabled by Security Audit: Unused open policy"
-    next
-end"""
-                severity = 'low'
-                
-                # Check dupe
-                existing = g.tenant_session.query(SecurityRecommendation).filter(
-                    SecurityRecommendation.related_policy_id == policy.policy_id,
-                    SecurityRecommendation.category == 'optimize_policy'
-                ).first()
-                
-                if not existing:
-                    rec = SecurityRecommendation(
-                        device_id=policy.device_id,
-                        category='optimize_policy',
-                        severity=severity,
-                        title=title,
-                        description=description,
-                        recommendation=recommendation,
-                        status='open',
-                        related_policy_id=policy.policy_id,
-                        related_vdom=policy.vdom,
-                        cli_remediation=cli
-                    )
-                    g.tenant_session.add(rec)
-                    recommendations_created += 1
-                continue
-
-            # If we have traffic, we suggest SPLITTING this policy into specific ones
-            # Construct a composite suggestion
-            
-            title = f'Restringir Política Abierta: ID {policy.policy_id}'
-            description = f'La política {policy.policy_id} ("{policy.name}") es demasiado permisiva. Se detectaron {len(usage_patterns)} flujos específicos.'
-            
-            summary_flows = []
-            new_policy_cmds = ""
-            
-            for idx, flow in enumerate(usage_patterns):
-                src, dst, svc, dport, count = flow
-                svc_name = svc if svc else (f"TCP/{dport}" if dport else "ALL")
-                
-                summary_flows.append(f"{src} -> {dst} ({svc_name})")
-                
-                # Don't suggest too many in one go
-                if idx < 5:
-                    new_policy_cmds += f"""
-    edit 0
-        set name "ZT_{policy.policy_id}_Rule{idx+1}"
-        set srcintf "{policy.src_intf or 'any'}"
-        set dstintf "{policy.dst_intf or 'any'}"
-        set srcaddr "{src}/32"
-        set dstaddr "{dst}/32"
-        set service "{svc_name}"
-        set schedule "always"
-        set action accept
-        set comments "Extracted from Policy {policy.policy_id}"
-    next"""
-
-            recommendation = (
-                f"Sustituir la política ID {policy.policy_id} por {len(usage_patterns)} reglas específicas. "
-                f"Flujos principales: {', '.join(summary_flows[:3])}..."
-            )
-            
-            cli = f"""config firewall policy
-{new_policy_cmds}
-    edit {policy.policy_id}
-        set status disable
-        set comments "Disabled: Replaced by specific ZT rules"
-    next
-end"""
-
-            # Check dupe
-            existing = g.tenant_session.query(SecurityRecommendation).filter(
-                SecurityRecommendation.related_policy_id == policy.policy_id,
-                SecurityRecommendation.category == 'optimize_policy'
-            ).first()
-            
-            if not existing:
-                rec = SecurityRecommendation(
-                    device_id=policy.device_id,
-                    category='optimize_policy',
-                    severity='critical', # Open policy matches traffic -> Critical risk
-                    title=title,
-                    description=description,
-                    recommendation=recommendation,
-                    status='open',
-                    related_policy_id=policy.policy_id,
-                    related_vdom=policy.vdom,
-                    cli_remediation=cli
-                )
-                g.tenant_session.add(rec)
-                recommendations_created += 1
+        # 2. AUDIT EXISTING POLICIES logic moved to DynamicAnalyzer
+        open_policies = [] # Empty list to skip loop below effectively until deleted
         
         g.tenant_session.commit()
         
@@ -1480,6 +1340,14 @@ def api_run_dynamic_audit():
                 # This service method usually commits internally or adds to session.
                 recommendations = DynamicAnalyzer.analyze_device(str(dev.id), days_back=days_back, session=g.tenant_session)
                 total_recs += len(recommendations)
+                
+                # Run VDOM Correlation Analysis (Phase 3)
+                from app.services.vdom_analyzer import VDOMAnalyzer
+                vdom_recs = VDOMAnalyzer.analyze_device(str(dev.id), session=g.tenant_session)
+                for rec in vdom_recs:
+                    g.tenant_session.add(rec)
+                total_recs += len(vdom_recs)
+                
                 total_scanned += 1
                 g.tenant_session.commit()
                 
