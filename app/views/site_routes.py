@@ -14,10 +14,11 @@ site_bp = Blueprint('site', __name__)
 def list_sites():
     # Sites are now Global/Main DB
     sites = db.session.query(Site).all()
-    # If we need device counts, we must query tenant DB for each
+    # Load equipos from tenant DB for each site (cross-DB annotation)
     for s in sites:
-         # Annotate on the fly (careful with N+1 queries, but sites are few)
-         s.device_count = g.tenant_session.query(Equipo).filter(Equipo.site_id == s.id).count()
+        # Annotate equipos list - template uses site.equipos to iterate
+        s.equipos = g.tenant_session.query(Equipo).filter(Equipo.site_id == s.id).limit(50).all()
+        s.device_count = len(s.equipos)
 
     return render_template('admin/sites/list.html', sites=sites)
 
