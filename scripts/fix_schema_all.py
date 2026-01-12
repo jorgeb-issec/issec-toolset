@@ -50,9 +50,29 @@ def fix_tenant_db(db_uri, name):
         inspector = inspect(engine)
         tables = inspector.get_table_names()
         
-        # 1. Ensure vdoms table exists (Prerequisite for FK)
+        # 0. Ensure ALL tables exist (Auto-creation)
+        # We need to bind the app metadata to this engine to create missing tables
+        from app.extensions.db import db
+        # Import all models to ensure they are registered in metadata
+        from app.models.interface import Interface
+        from app.models.policy import Policy
+        from app.models.vdom import VDOM
+        from app.models.address_object import AddressObject
+        from app.models.service_object import ServiceObject
+        from app.models.policy_mappings import PolicyInterfaceMapping, PolicyAddressMapping, PolicyServiceMapping
+        from app.models.security_recommendation import SecurityRecommendation
+        from app.models.log_entry import LogEntry
+
+        print("    [+] verifying/creating all tables via SQLAlchemy metadata...")
+        db.metadata.create_all(engine)
+        
+        # Refresh inspector after creation
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        
+        # 1. Ensure vdoms table exists (Prerequisite for FK in manual SQL)
         if 'vdoms' not in tables:
-            print("    [!] Missing table 'vdoms'. Creating...")
+            print("    [!] Missing table 'vdoms'. Creating manually...")
             with engine.connect() as conn:
                 conn.execute(text("""
                     CREATE TABLE vdoms (
@@ -67,7 +87,7 @@ def fix_tenant_db(db_uri, name):
                 conn.commit()
             print("    [✓] Created table vdoms")
             
-        # 2. Fix policies table
+        # 2. Fix policies table columns
         if 'policies' in tables:
             cols = [c['name'] for c in inspector.get_columns('policies')]
             
@@ -90,61 +110,7 @@ def fix_tenant_db(db_uri, name):
             else:
                  print("    [=] policies.vdom_id OK")
         
-        # 3. Fix Mapping Tables
-        # policy_interface_mappings
-        if 'policy_interface_mappings' not in tables:
-            print("    [!] Missing table 'policy_interface_mappings'. Creating...")
-            with engine.connect() as conn:
-                conn.execute(text("""
-                    CREATE TABLE policy_interface_mappings (
-                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                        policy_uuid UUID NOT NULL REFERENCES policies(uuid) ON DELETE CASCADE,
-                        interface_id UUID NOT NULL REFERENCES interfaces(id) ON DELETE CASCADE,
-                        direction VARCHAR(10) NOT NULL,
-                        CONSTRAINT uq_policy_interface_direction UNIQUE (policy_uuid, interface_id, direction)
-                    )
-                """))
-                conn.execute(text("CREATE INDEX idx_policy_interface_mappings_policy_uuid ON policy_interface_mappings(policy_uuid)"))
-                conn.execute(text("CREATE INDEX idx_policy_interface_mappings_interface_id ON policy_interface_mappings(interface_id)"))
-                conn.commit()
-            print("    [✓] Created table policy_interface_mappings")
-
-        # policy_address_mappings
-        if 'policy_address_mappings' not in tables:
-            print("    [!] Missing table 'policy_address_mappings'. Creating...")
-            with engine.connect() as conn:
-                conn.execute(text("""
-                    CREATE TABLE policy_address_mappings (
-                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                        policy_uuid UUID NOT NULL REFERENCES policies(uuid) ON DELETE CASCADE,
-                        address_id UUID NOT NULL REFERENCES address_objects(id) ON DELETE CASCADE,
-                        direction VARCHAR(10) NOT NULL,
-                        CONSTRAINT uq_policy_address_direction UNIQUE (policy_uuid, address_id, direction)
-                    )
-                """))
-                conn.execute(text("CREATE INDEX idx_policy_address_mappings_policy_uuid ON policy_address_mappings(policy_uuid)"))
-                conn.execute(text("CREATE INDEX idx_policy_address_mappings_address_id ON policy_address_mappings(address_id)"))
-                conn.commit()
-            print("    [✓] Created table policy_address_mappings")
-
-        # policy_service_mappings
-        if 'policy_service_mappings' not in tables:
-            print("    [!] Missing table 'policy_service_mappings'. Creating...")
-            with engine.connect() as conn:
-                conn.execute(text("""
-                    CREATE TABLE policy_service_mappings (
-                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                        policy_uuid UUID NOT NULL REFERENCES policies(uuid) ON DELETE CASCADE,
-                        service_id UUID NOT NULL REFERENCES service_objects(id) ON DELETE CASCADE,
-                        CONSTRAINT uq_policy_service UNIQUE (policy_uuid, service_id)
-                    )
-                """))
-                conn.execute(text("CREATE INDEX idx_policy_service_mappings_policy_uuid ON policy_service_mappings(policy_uuid)"))
-                conn.execute(text("CREATE INDEX idx_policy_service_mappings_service_id ON policy_service_mappings(service_id)"))
-                conn.commit()
-            print("    [✓] Created table policy_service_mappings")
-
-        # 4. Fix Security Recommendations (v1.3.1 columns)
+        # 3. Security Recommendations (v1.3.1 columns)
         if 'security_recommendations' in tables:
             sr_cols = [c['name'] for c in inspector.get_columns('security_recommendations')]
             
@@ -161,6 +127,46 @@ def fix_tenant_db(db_uri, name):
                     conn.execute(text("ALTER TABLE security_recommendations ADD COLUMN suggested_policy JSONB"))
                     conn.commit()
                 print("    [✓] Added security_recommendations.suggested_policy")
+
+        # 4. Fix Log Entries (v1.3.0 columns)
+        if 'log_entries' in tables:
+            le_cols = [c['name'] for c in inspector.get_columns('log_entries')]
+            
+            # vdom_id
+            if 'vdom_id' not in le_cols:
+                print("    [!] Missing log_entries.vdom_id. Adding...")
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE log_entries ADD COLUMN vdom_id UUID REFERENCES vdoms(id) ON DELETE SET NULL"))
+                    conn.execute(text("CREATE INDEX idx_log_entries_vdom_id ON log_entries(vdom_id)"))
+                    conn.commit()
+                print("    [✓] Added log_entries.vdom_id")
+
+            # policy_uuid
+            if 'policy_uuid' not in le_cols:
+                print("    [!] Missing log_entries.policy_uuid. Adding...")
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE log_entries ADD COLUMN policy_uuid UUID REFERENCES policies(uuid) ON DELETE SET NULL"))
+                    conn.execute(text("CREATE INDEX idx_log_entries_policy_uuid ON log_entries(policy_uuid)"))
+                    conn.commit()
+                print("    [✓] Added log_entries.policy_uuid")
+
+            # src_intf_id
+            if 'src_intf_id' not in le_cols:
+                print("    [!] Missing log_entries.src_intf_id. Adding...")
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE log_entries ADD COLUMN src_intf_id UUID REFERENCES interfaces(id) ON DELETE SET NULL"))
+                    conn.execute(text("CREATE INDEX idx_log_entries_src_intf_id ON log_entries(src_intf_id)"))
+                    conn.commit()
+                print("    [✓] Added log_entries.src_intf_id")
+
+            # dst_intf_id
+            if 'dst_intf_id' not in le_cols:
+                print("    [!] Missing log_entries.dst_intf_id. Adding...")
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE log_entries ADD COLUMN dst_intf_id UUID REFERENCES interfaces(id) ON DELETE SET NULL"))
+                    conn.execute(text("CREATE INDEX idx_log_entries_dst_intf_id ON log_entries(dst_intf_id)"))
+                    conn.commit()
+                print("    [✓] Added log_entries.dst_intf_id")
 
     except Exception as e:
         print(f"    [X] Error fixing tenant {name}: {e}")
