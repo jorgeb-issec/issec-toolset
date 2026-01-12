@@ -89,6 +89,78 @@ def fix_tenant_db(db_uri, name):
                 print("    [✓] Added policies.vdom_id")
             else:
                  print("    [=] policies.vdom_id OK")
+        
+        # 3. Fix Mapping Tables
+        # policy_interface_mappings
+        if 'policy_interface_mappings' not in tables:
+            print("    [!] Missing table 'policy_interface_mappings'. Creating...")
+            with engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE policy_interface_mappings (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        policy_uuid UUID NOT NULL REFERENCES policies(uuid) ON DELETE CASCADE,
+                        interface_id UUID NOT NULL REFERENCES interfaces(id) ON DELETE CASCADE,
+                        direction VARCHAR(10) NOT NULL,
+                        CONSTRAINT uq_policy_interface_direction UNIQUE (policy_uuid, interface_id, direction)
+                    )
+                """))
+                conn.execute(text("CREATE INDEX idx_policy_interface_mappings_policy_uuid ON policy_interface_mappings(policy_uuid)"))
+                conn.execute(text("CREATE INDEX idx_policy_interface_mappings_interface_id ON policy_interface_mappings(interface_id)"))
+                conn.commit()
+            print("    [✓] Created table policy_interface_mappings")
+
+        # policy_address_mappings
+        if 'policy_address_mappings' not in tables:
+            print("    [!] Missing table 'policy_address_mappings'. Creating...")
+            with engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE policy_address_mappings (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        policy_uuid UUID NOT NULL REFERENCES policies(uuid) ON DELETE CASCADE,
+                        address_id UUID NOT NULL REFERENCES address_objects(id) ON DELETE CASCADE,
+                        direction VARCHAR(10) NOT NULL,
+                        CONSTRAINT uq_policy_address_direction UNIQUE (policy_uuid, address_id, direction)
+                    )
+                """))
+                conn.execute(text("CREATE INDEX idx_policy_address_mappings_policy_uuid ON policy_address_mappings(policy_uuid)"))
+                conn.execute(text("CREATE INDEX idx_policy_address_mappings_address_id ON policy_address_mappings(address_id)"))
+                conn.commit()
+            print("    [✓] Created table policy_address_mappings")
+
+        # policy_service_mappings
+        if 'policy_service_mappings' not in tables:
+            print("    [!] Missing table 'policy_service_mappings'. Creating...")
+            with engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE policy_service_mappings (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        policy_uuid UUID NOT NULL REFERENCES policies(uuid) ON DELETE CASCADE,
+                        service_id UUID NOT NULL REFERENCES service_objects(id) ON DELETE CASCADE,
+                        CONSTRAINT uq_policy_service UNIQUE (policy_uuid, service_id)
+                    )
+                """))
+                conn.execute(text("CREATE INDEX idx_policy_service_mappings_policy_uuid ON policy_service_mappings(policy_uuid)"))
+                conn.execute(text("CREATE INDEX idx_policy_service_mappings_service_id ON policy_service_mappings(service_id)"))
+                conn.commit()
+            print("    [✓] Created table policy_service_mappings")
+
+        # 4. Fix Security Recommendations (v1.3.1 columns)
+        if 'security_recommendations' in tables:
+            sr_cols = [c['name'] for c in inspector.get_columns('security_recommendations')]
+            
+            if 'cli_remediation' not in sr_cols:
+                print("    [!] Missing security_recommendations.cli_remediation. Adding...")
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE security_recommendations ADD COLUMN cli_remediation TEXT"))
+                    conn.commit()
+                print("    [✓] Added security_recommendations.cli_remediation")
+
+            if 'suggested_policy' not in sr_cols:
+                print("    [!] Missing security_recommendations.suggested_policy. Adding...")
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE security_recommendations ADD COLUMN suggested_policy JSONB"))
+                    conn.commit()
+                print("    [✓] Added security_recommendations.suggested_policy")
 
     except Exception as e:
         print(f"    [X] Error fixing tenant {name}: {e}")
