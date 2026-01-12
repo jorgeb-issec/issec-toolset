@@ -157,6 +157,36 @@ def ensure_sites_table_and_migrate(engine):
     except Exception as e:
         print(f"     ! Error migrating sites: {e}")
 
+def fix_log_entries_schema(engine):
+    """Ensure log_entries columns are BigInteger"""
+    with engine.connect() as conn:
+        print("   - Checking log_entries schema (BigInt fix)...")
+        inspector = sa.inspect(conn)
+        
+        try:
+             # Check if table exists
+             if not inspector.has_table('log_entries'):
+                 return
+
+             columns = {c['name']: c for c in inspector.get_columns('log_entries')}
+             
+             # Columns that should be BigInteger
+             targets = ['sent_bytes', 'rcvd_bytes', 'sent_pkts', 'rcvd_pkts', 'duration',
+                        'sentbyte', 'rcvdbyte', 'sentpkt', 'rcvdpkt'] 
+             
+             for col in targets:
+                 if col in columns:
+                     # We force update to BIGINT to handle overflow
+                     # Only if not already? ALTER TYPE is fast if already compat.
+                     # But let's just do it.
+                     conn.execute(sa.text(f"ALTER TABLE log_entries ALTER COLUMN {col} TYPE BIGINT"))
+             
+             conn.commit()
+             print("     + Verified/Updated log columns to BigInteger")
+        except Exception as e:
+            print(f"     ! Error updating log_entries schema: {e}")
+
+
 def main():
     app = create_app()
     with app.app_context():
@@ -176,6 +206,7 @@ def main():
                 apply_indices(engine)
                 # 2. Fix Schema
                 fix_missing_vdom_id(engine)
+                fix_log_entries_schema(engine)
                 print("   ✅ Complete")
             except Exception as e:
                 print(f"   ❌ Failed: {e}")
