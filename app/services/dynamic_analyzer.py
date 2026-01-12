@@ -292,7 +292,7 @@ end"""
 
             recommendation_text = (
                 f"Sustituir la política ID {pid} por reglas específicas basadas en el tráfico real. "
-                f"Flujos principales detectados: {', '.join(summary_flows[:3])}..."
+                f"Flujos principales detectados: {', '.join(summary_flows)}"
             )
             
             cli = f"""config firewall policy
