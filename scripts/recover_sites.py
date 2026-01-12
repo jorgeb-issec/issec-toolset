@@ -1,5 +1,11 @@
 import logging
 import uuid
+import sys
+import os
+
+# Add parent dir to path to find 'app'
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from app import create_app
 from app.extensions.db import db
 from app.models.core import Company

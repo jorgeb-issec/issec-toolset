@@ -5,8 +5,12 @@ from app.models.equipo import Equipo
 from app.models.site import Site
 from app.models.vdom import VDOM
 from app.models.interface import Interface
+from app.models.log_entry import LogEntry
+from app.models.security_recommendation import SecurityRecommendation
 from app.extensions.db import db
+from sqlalchemy import func, desc, or_
 import logging
+from datetime import datetime, timedelta
 
 log_bp = Blueprint('log_analytics', __name__, url_prefix='/logs')
 
@@ -17,7 +21,12 @@ logger = logging.getLogger(__name__)
 @company_required
 @product_required('log_analyzer')
 def index():
-    """Main Log Analyzer Dashboard"""
+    """Main Log Analyzer Dashboard & List API"""
+    
+    # If it's a JSON request (heuristic: page param or explicit header)
+    if request.args.get('page') or request.headers.get('Accept') == 'application/json':
+        return get_logs_list()
+
     # Get devices and sites for filter
     devices = g.tenant_session.query(Equipo).all()
     sites = db.session.query(Site).all()
@@ -29,6 +38,151 @@ def index():
         
     return render_template('logs/index.html', devices=devices, sites=sites, api_token=token)
 
+def get_logs_list():
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 32, type=int)
+        search = request.args.get('q', '').lower()
+        device_id = request.args.get('device_id')
+        
+        query = g.tenant_session.query(LogEntry)
+        
+        # Filters
+        if device_id and device_id != 'None':
+            query = query.filter(LogEntry.device_id == device_id)
+            
+        if search:
+            query = query.filter(or_(
+                LogEntry.src_ip.ilike(f"%{search}%"),
+                LogEntry.dst_ip.ilike(f"%{search}%"),
+                LogEntry.service.ilike(f"%{search}%"),
+                LogEntry.policy_id.cast(db.String).ilike(f"%{search}%")
+            ))
+            
+        # Sort
+        query = query.order_by(desc(LogEntry.timestamp))
+        
+        # Paginate
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        data = []
+        for log in pagination.items:
+            data.append({
+                'id': str(log.id),
+                'timestamp': log.timestamp.isoformat() if log.timestamp else None,
+                'level': log.level,
+                'vdom': log.vdom or (log.vdom_ref.name if log.vdom_ref else '-'),
+                'log_type': log.log_type,
+                'src_ip': log.src_ip,
+                'dst_ip': log.dst_ip,
+                'service': log.service,
+                'action': log.action,
+                'app': log.app,
+                'raw_data': log.raw_data
+            })
+            
+        return jsonify({
+            'data': data,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': pagination.total,
+                'pages': pagination.pages
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error listing logs: {e}")
+        return jsonify({'data': [], 'error': str(e)}), 500
+
+@log_bp.route('/<uuid:log_id>', methods=['GET'])
+@login_required
+@company_required
+def get_log_details(log_id):
+    try:
+        log = g.tenant_session.query(LogEntry).get(log_id)
+        if not log:
+            return jsonify({'success': False, 'error': 'Log not found'}), 404
+            
+        return jsonify({
+            'success': True,
+            'data': {
+                'id': str(log.id),
+                'timestamp': log.timestamp.isoformat(),
+                'raw_data': log.raw_data
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@log_bp.route('/stats', methods=['GET'])
+@login_required
+@company_required
+def get_stats():
+    """Dashboard Stats"""
+    try:
+        device_id = request.args.get('device_id')
+        
+        q_total = g.tenant_session.query(func.count(LogEntry.id))
+        q_threats = g.tenant_session.query(func.count(LogEntry.id)).filter(LogEntry.action == 'deny')
+        
+        if device_id:
+            q_total = q_total.filter(LogEntry.device_id == device_id)
+            q_threats = q_threats.filter(LogEntry.device_id == device_id)
+            
+        total = q_total.scalar() or 0
+        threats = q_threats.scalar() or 0
+        
+        # Recommendations
+        rec_count = g.tenant_session.query(func.count(SecurityRecommendation.id)).filter(SecurityRecommendation.status == 'open').scalar() or 0
+        
+        return jsonify({
+            'totalResults': total, # Naming to match typical Chart.js or frontend
+            'total_logs': total,
+            'threats': threats,
+            'recommendations': rec_count,
+            'volume': '0 GB' # Placeholder or calc
+        })
+    except Exception as e:
+        logger.error(f"Stats error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@log_bp.route('/recommendations', methods=['GET'])
+@login_required
+@company_required
+def get_recommendations():
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 5, type=int)
+        
+        query = g.tenant_session.query(SecurityRecommendation).filter(SecurityRecommendation.status == 'open')
+        query = query.order_by(desc(SecurityRecommendation.created_at))
+        
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        data = []
+        for rec in pagination.items:
+            data.append({
+                'id': str(rec.id),
+                'title': rec.title,
+                'description': rec.description,
+                'recommendation': rec.recommendation,
+                'cli_remediation': rec.cli_remediation, # v1.3.1
+                'severity': rec.severity,
+                'created_at': rec.created_at.isoformat()
+            })
+            
+        return jsonify({
+            'data': data,
+            'pagination': {
+                'total': pagination.total,
+                'pages': pagination.pages
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Topology Routes (Restored)
 @log_bp.route('/topology', methods=['GET', 'POST'])
 @login_required
 @company_required
@@ -72,7 +226,6 @@ def topology():
             return jsonify(generate_topology_data(site_id))
         except Exception as e:
             logger.error(f"Error generating topology: {e}")
-            # Return empty structure on error to prevent frontend crash
             return jsonify({'nodes': [], 'edges': [], 'error': str(e)})
 
 @log_bp.route('/analyze/topology', methods=['POST'])
@@ -136,12 +289,7 @@ def generate_topology_data(site_id=None):
                 # 3. VDOMs
                 vdoms = g.tenant_session.query(VDOM).filter(VDOM.device_id == d.id).all()
                 
-                # If no VDOMs found (maybe manual device), check for direct interfaces?
-                # But for now assuming VDOM schema is used.
                 if not vdoms:
-                    # Creating a dummy "root" VDOM node if none exist? 
-                    # Or just link interfaces to device?
-                    # Let's link interfaces directly to device if no VDOMs (or treat device as VDOM level)
                     pass
 
                 for v in vdoms:
@@ -158,10 +306,10 @@ def generate_topology_data(site_id=None):
                     intfs = g.tenant_session.query(Interface).filter(Interface.vdom_id == v.id).all()
                     for i in intfs:
                         intf_id = str(i.id)
-                        color = '#6c757d' # grey
-                        if i.role == 'wan': color = '#dc3545' # red
-                        elif i.role == 'lan': color = '#198754' # green
-                        elif i.role == 'dmz': color = '#ffc107' # yellow
+                        color = '#6c757d'
+                        if i.role == 'wan': color = '#dc3545'
+                        elif i.role == 'lan': color = '#198754'
+                        elif i.role == 'dmz': color = '#ffc107'
                         
                         label = f"{i.name}"
                         if i.ip_address:
@@ -178,7 +326,6 @@ def generate_topology_data(site_id=None):
                         
     except Exception as e:
         logger.error(f"Error in generate_topology_data: {e}")
-        # Consider re-raising or returning partial
         pass
 
     return {'nodes': nodes, 'edges': edges}
