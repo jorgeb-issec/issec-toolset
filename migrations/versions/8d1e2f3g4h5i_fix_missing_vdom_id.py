@@ -20,6 +20,11 @@ def upgrade():
     """Add vdom_id to policy_history if missing"""
     conn = op.get_bind()
     inspector = sa.inspect(conn)
+    tables = inspector.get_table_names()
+    
+    if 'policy_history' not in tables:
+        return
+
     columns = [c['name'] for c in inspector.get_columns('policy_history')]
     
     if 'vdom_id' not in columns:
