@@ -128,6 +128,13 @@ class AIService:
            end
         
         {"5. **NEW POLICY GENERATION**: Generate granular Zero Trust policies for observed traffic flows. Create multiple specific policies rather than one broad one if multiple distinct flows exist." if generate_new_policies else ""}
+        
+        6. **CONSOLIDATION & DEDUPLICATION** (CRITICAL):
+           - If you identify multiple hosts, policies, or events with the SAME root cause (e.g. "Insecure WiFi Protocol", "Clear text password", "Multiple sources scanning port 445"), DO NOT create separate recommendations for each instance.
+           - Create ONE single 'summary' recommendation.
+           - In the 'description', state the total COUNT of affected entities and list 3-5 examples.
+           - Ensure 'affected_count' reflects the total volume.
+           - This is vital to avoid overwhelming the user with thousands of identical alerts.
 
         === OUTPUT FORMAT (JSON Only) ===
         {{

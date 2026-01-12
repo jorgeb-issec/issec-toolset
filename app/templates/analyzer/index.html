@@ -672,29 +672,29 @@
 
             if (data.data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No se encontraron logs</td></tr>';
-                return;
+                // Do not return early, proceed to update pagination (which will set it to 0)
+            } else {
+                data.data.forEach(log => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="small">${log.timestamp ? new Date(log.timestamp).toLocaleString() : '-'}</td>
+                        <td><span class="badge bg-${getLevelBadge(log.level)}">${log.level || 'N/A'}</span></td>
+                        <td class="small">${log.vdom || 'root'}</td>
+                        <td class="small">${log.log_type || '-'}</td>
+                        <td>${log.src_ip || '-'}</td>
+                        <td>${log.dst_ip || '-'}</td>
+                        <td>${log.service || '-'}</td>
+                        <td><span class="badge bg-${log.action === 'accept' ? 'success' : (log.action === 'deny' ? 'danger' : 'secondary')}">${log.action || '-'}</span></td>
+                        <td class="small">${log.app || '-'}</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-info border-0" onclick="viewLogDetails('${log.id}')" title="Ver Detalles Raw">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
             }
-
-            data.data.forEach(log => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="small">${log.timestamp ? new Date(log.timestamp).toLocaleString() : '-'}</td>
-                    <td><span class="badge bg-${getLevelBadge(log.level)}">${log.level || 'N/A'}</span></td>
-                    <td class="small">${log.vdom || 'root'}</td>
-                    <td class="small">${log.log_type || '-'}</td>
-                    <td>${log.src_ip || '-'}</td>
-                    <td>${log.dst_ip || '-'}</td>
-                    <td>${log.service || '-'}</td>
-                    <td><span class="badge bg-${log.action === 'accept' ? 'success' : (log.action === 'deny' ? 'danger' : 'secondary')}">${log.action || '-'}</span></td>
-                    <td class="small">${log.app || '-'}</td>
-                    <td class="text-end">
-                        <button class="btn btn-sm btn-outline-info border-0" onclick="viewLogDetails('${log.id}')" title="Ver Detalles Raw">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
 
             updatePagination(data.pagination);
 
@@ -750,6 +750,13 @@
             const info = document.getElementById(`pagination-info-${pos}`);
             if (!container || !info) return;
 
+            // If total is 0, show simplified message
+            if (pagination.total === 0) {
+                info.innerText = 'Mostrando 0-0 de 0';
+                container.innerHTML = '';
+                return;
+            }
+
             const startItem = ((pagination.page - 1) * pagination.per_page) + 1;
             const endItem = Math.min(pagination.page * pagination.per_page, pagination.total);
             info.innerText = `Mostrando ${pagination.total > 0 ? startItem : 0}-${endItem} de ${pagination.total}`;
@@ -777,7 +784,14 @@
 
     async function loadStats() {
         try {
-            const data = await apiCall('/analyzer/stats');
+            // Get Filters GLOBALLY for consistent stats
+            const deviceId = document.getElementById('global-device-select').value;
+            let url = '/analyzer/stats';
+            if (deviceId) {
+                url += `?device_id=${deviceId}`;
+            }
+
+            const data = await apiCall(url);
             if (data.success && data.data) {
                 const stats = data.data;
 
@@ -1040,10 +1054,7 @@
     async function loadStaticAudit() {
         // Get device ID from Global Filter
         let deviceId = document.getElementById('global-device-select').value;
-        if (!deviceId) {
-            alert("Por favor seleccione un equipo en el filtro superior primero.");
-            return;
-        }
+        // Allow empty device ID for "All Devices" scan
 
         const btn = event.currentTarget;
         const originalText = btn.innerHTML;
@@ -1051,8 +1062,10 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analizando...';
 
         try {
-            await apiCall('/analyzer/audit/static', 'POST', JSON.stringify({ device_id: deviceId }));
+            await apiCall('/analyzer/audit/static', 'POST', JSON.stringify({ device_id: deviceId || 'all' }));
             loadRecommendations('static');
+            // Reload stats to reflect new counts
+            loadStats();
         } catch (e) {
             alert('Error en auditoría estática: ' + e.message);
         } finally {
@@ -1063,10 +1076,7 @@
 
     async function runDynamicAudit() {
         let deviceId = document.getElementById('global-device-select').value;
-        if (!deviceId) {
-            alert("Por favor seleccione un equipo en el filtro superior primero.");
-            return;
-        }
+        // Allow empty device ID for "All Devices" scan
 
         const btn = event.currentTarget;
         const originalText = btn.innerHTML;
@@ -1074,8 +1084,10 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analizando...';
 
         try {
-            await apiCall('/analyzer/audit/dynamic', 'POST', JSON.stringify({ device_id: deviceId, days_back: 30 }));
+            await apiCall('/analyzer/audit/dynamic', 'POST', JSON.stringify({ device_id: deviceId || 'all', days_back: 30 }));
             loadRecommendations('dynamic');
+            // Reload stats to reflect new counts
+            loadStats();
         } catch (e) {
             alert('Error en auditoría dinámica: ' + e.message);
         } finally {

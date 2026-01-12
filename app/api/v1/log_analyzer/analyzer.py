@@ -1322,6 +1322,18 @@ def api_run_ai_analysis():
                 if cli_cmd and resolved_vdom and 'config vdom' not in cli_cmd:
                     cli_cmd = f"config vdom\n    edit {resolved_vdom}\n{cli_cmd}"
 
+                # Check for existing recommendation to avoid duplicates
+                existing_rec = g.tenant_session.query(SecurityRecommendation).filter(
+                    SecurityRecommendation.device_id == device_id,
+                    SecurityRecommendation.category == rec.get('category', 'security'),
+                    SecurityRecommendation.title == rec.get('title', 'Security Issue'),
+                    SecurityRecommendation.related_policy_id == rec.get('related_policy_id')
+                ).first()
+
+                if existing_rec:
+                    # Recommendation already exists, skip to avoid duplicates
+                    continue
+
                 recommendation = SecurityRecommendation(
                     device_id=device_id,
                     category=rec.get('category', 'security'),
@@ -1360,47 +1372,71 @@ def api_run_ai_analysis():
 def api_run_static_audit():
     """
     Run Static Audit (Configuration Analysis)
+    If device_id is missing or 'all', runs on ALL devices.
     """
     data = request.get_json() or {}
     device_id = data.get('device_id')
     
-    if not device_id:
-        return jsonify({'success': False, 'error': 'device_id is required'}), 400
-        
     try:
-        # Run Static Analysis
-        recommendations = StaticAnalyzer.analyze_device(device_id, session=g.tenant_session)
+        devices_to_scan = []
+        if not device_id or device_id == 'all' or device_id == 'None':
+            # Scan ALL devices
+            devices_to_scan = g.tenant_session.query(Equipo).all()
+        else:
+            # Scan specific device
+            dev = g.tenant_session.get(Equipo, device_id)
+            if dev:
+                devices_to_scan = [dev]
         
-        saved_count = 0
-        for rec_data in recommendations:
-             # Check for duplicates or update existing
-             existing = g.tenant_session.query(SecurityRecommendation).filter(
-                 SecurityRecommendation.device_id == device_id,
-                 SecurityRecommendation.category == rec_data['category'],
-                 SecurityRecommendation.related_policy_id == rec_data.get('related_policy_id')
-             ).first()
-             
-             if not existing:
-                 rec = SecurityRecommendation(
-                     device_id=device_id,
-                     category=rec_data['category'],
-                     severity=rec_data['severity'],
-                     title=rec_data['title'],
-                     description=rec_data['description'],
-                     recommendation=rec_data['recommendation'],
-                     related_policy_id=rec_data.get('related_policy_id'),
-                     related_vdom=rec_data.get('related_vdom'),
-                     cli_remediation=rec_data.get('cli_remediation')
-                 )
-                 g.tenant_session.add(rec)
-                 saved_count += 1
-        
-        g.tenant_session.commit()
+        if not devices_to_scan:
+             return jsonify({'success': False, 'error': 'No devices found to scan'}), 404
+
+        total_new_recs = 0
+        total_scanned = 0
+
+        for dev in devices_to_scan:
+            try:
+                # Run Static Analysis
+                recommendations = StaticAnalyzer.analyze_device(str(dev.id), session=g.tenant_session)
+                
+                for rec_data in recommendations:
+                     # Check for duplicates or update existing
+                     existing = g.tenant_session.query(SecurityRecommendation).filter(
+                         SecurityRecommendation.device_id == dev.id,
+                         SecurityRecommendation.category == rec_data['category'],
+                         SecurityRecommendation.related_policy_id == rec_data.get('related_policy_id')
+                     ).first()
+                     
+                     if not existing:
+                         rec = SecurityRecommendation(
+                             device_id=dev.id,
+                             category=rec_data['category'],
+                             severity=rec_data['severity'],
+                             title=rec_data['title'],
+                             description=rec_data['description'],
+                             recommendation=rec_data['recommendation'],
+                             related_policy_id=rec_data.get('related_policy_id'),
+                             related_vdom=rec_data.get('related_vdom'),
+                             cli_remediation=rec_data.get('cli_remediation')
+                         )
+                         g.tenant_session.add(rec)
+                         total_new_recs += 1
+                
+                total_scanned += 1
+                # Commit per device to save progress/avoid huge transactions
+                g.tenant_session.commit()
+                
+            except Exception as inner_e:
+                current_app.logger.error(f"Error scanning device {dev.nombre}: {inner_e}")
+                g.tenant_session.rollback() # Rollback only this device's failure if possible, but session is shared.
+                # In Flask-SQLAlchemy, rollback rolls back the whole session.
+                # So we continue but this device's changes are lost.
         
         return jsonify({
             'success': True,
-            'message': f'Static Audit completed. {saved_count} new recommendations found.',
-            'count': len(recommendations)
+            'message': f'Static Audit completed on {total_scanned} devices. {total_new_recs} new recommendations found.',
+            'count': total_new_recs,
+            'devices_scanned': total_scanned
         })
 
     except Exception as e:
@@ -1415,27 +1451,47 @@ def api_run_static_audit():
 def api_run_dynamic_audit():
     """
     Run Dynamic Audit (Log-based Analysis)
+    If device_id is missing or 'all', runs on ALL devices.
     """
     data = request.get_json() or {}
     device_id = data.get('device_id')
     days_back = data.get('days_back', 30)
     
-    if not device_id:
-        return jsonify({'success': False, 'error': 'device_id is required'}), 400
-        
     try:
-        # Run Dynamic Analysis with tenant session
-        recommendations = DynamicAnalyzer.analyze_device(device_id, days_back=days_back, session=g.tenant_session)
+        devices_to_scan = []
+        if not device_id or device_id == 'all' or device_id == 'None':
+            # Scan ALL devices
+            devices_to_scan = g.tenant_session.query(Equipo).all()
+        else:
+            # Scan specific device
+            dev = g.tenant_session.get(Equipo, device_id)
+            if dev:
+                devices_to_scan = [dev]
         
-        # Recommendations are already added to session by the service, verify commits
-        # The service calls commit(). But we passed g.tenant_session.
-        # If service calls commit(), it commits the passed session.
-        # This is fine.
+        if not devices_to_scan:
+             return jsonify({'success': False, 'error': 'No devices found to scan'}), 404
+             
+        total_recs = 0
+        total_scanned = 0
         
+        for dev in devices_to_scan:
+            try:
+                # Run Dynamic Analysis with tenant session
+                # This service method usually commits internally or adds to session.
+                recommendations = DynamicAnalyzer.analyze_device(str(dev.id), days_back=days_back, session=g.tenant_session)
+                total_recs += len(recommendations)
+                total_scanned += 1
+                g.tenant_session.commit()
+                
+            except Exception as inner_e:
+                 current_app.logger.error(f"Error scanning device {dev.nombre}: {inner_e}")
+                 g.tenant_session.rollback()
+
         return jsonify({
             'success': True,
-            'message': f'Dynamic Audit completed. {len(recommendations)} recommendations generated.',
-            'count': len(recommendations)
+            'message': f'Dynamic Audit completed on {total_scanned} devices. {total_recs} recommendations generated.',
+            'count': total_recs,
+            'devices_scanned': total_scanned
         })
 
     except Exception as e:
