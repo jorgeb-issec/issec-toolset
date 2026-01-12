@@ -111,6 +111,16 @@ def ensure_sites_table_and_migrate(engine):
     try:
         Site.__table__.create(engine, checkfirst=True)
         print("     + Verified 'sites' table exists")
+        
+        # Check for missing columns (e.g. topology_data)
+        with engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            columns = [c['name'] for c in inspector.get_columns('sites')]
+            if 'topology_data' not in columns:
+                print("     + Adding missing topology_data column to sites")
+                conn.execute(sa.text("ALTER TABLE sites ADD COLUMN topology_data JSONB"))
+                conn.commit()
+            
     except Exception as e:
         print(f"     ! Error ensuring 'sites' table: {e}")
         
