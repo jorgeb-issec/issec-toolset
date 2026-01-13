@@ -43,8 +43,9 @@ class ConfigLoaderService:
             # 4. Sync Service Objects
             ConfigLoaderService._sync_service_objects(device, vdom_map, config_data, session)
             
-            # 5. Sync Policies
-            ConfigLoaderService._sync_policies(device, vdom_map, config_data, session)
+            # NOTE: Policies are NOT loaded from .conf files
+            # They are imported separately via JSON files in Policy Explorer
+            # ConfigLoaderService._sync_policies(device, vdom_map, config_data, session)
             
             session.commit()
             return True, "Configuration loaded successfully"

@@ -330,13 +330,13 @@ def import_new_vdom(device_id):
             
             vdom.config_data = parsed_config
             
-            # Sync DB objects (interfaces, addresses, services, policies)
+            # Sync DB objects (interfaces, addresses, services - NOT policies)
             success, msg = ConfigLoaderService.load_config(device_id, parsed_config, g.tenant_session)
             
             if not success:
                 flash(f"VDOM importado pero hubo errores cargando objetos: {msg}", "warning")
             else:
-                flash(f"VDOM '{vdom_name}' importado exitosamente con {len(parsed_config.get('interfaces', []))} interfaces, {len(parsed_config.get('policies', []))} políticas.", "success")
+                flash(f"VDOM '{vdom_name}' importado con {len(parsed_config.get('interfaces', []))} interfaces, {len(parsed_config.get('addresses', []))} objetos de dirección.", "success")
                  
         except Exception as e:
             flash(f"Error importando VDOM: {str(e)}", "danger")
