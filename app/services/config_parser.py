@@ -29,16 +29,26 @@ class ConfigParserService:
             data['config_data']['firmware'] = version_match.group(1)
             
         # 1b. VDOM Name (from header if specific VDOM config)
-        # #global_vdom=0:vd_name=routing/routing
+        # #global_vdom=0:vd_name=VD_Cliente/VD_Cliente
         vdom_header_match = re.search(r'vd_name=([^/]+)/(\S+)', content)
         if vdom_header_match:
-             # usually "root/root" or "routing/routing"
-             # group(1) might be vdom name, or group(2)? 
-             # In "routing/routing", it seems to be name/uuid or name/alias. 
-             # Let's take group(1) as name.
-             data['vdom_name'] = vdom_header_match.group(1)
+             # usually "root/root" or "VD_Cliente/VD_Cliente"
+             # group(1) is the vdom name
+             detected_vdom = vdom_header_match.group(1)
+             data['vdom_name'] = detected_vdom
+             # Ensure detected VDOM is in the vdoms list
+             if detected_vdom not in data['config_data']['vdoms']:
+                 data['config_data']['vdoms'].append(detected_vdom)
         else:
             data['vdom_name'] = None
+            # Try to detect VDOM from "set vdom" in interface configs
+            # This handles specific VDOM config files that don't have a header
+            vdom_from_intf = re.search(r'set vdom "([^"]+)"', content)
+            if vdom_from_intf:
+                detected_vdom = vdom_from_intf.group(1)
+                data['vdom_name'] = detected_vdom
+                if detected_vdom not in data['config_data']['vdoms']:
+                    data['config_data']['vdoms'].append(detected_vdom)
             
         # 2. Hostname
         hostname_match = re.search(r'set hostname "([^"]+)"', content)
@@ -204,10 +214,9 @@ class ConfigParserService:
                 # Parse objects in this section
                 ConfigParserService._parse_vdom_objects(section, current_vdom, data)
         else:
-             # No VDOM structure found, parse entirely as context
+             # No VDOM structure found (specific VDOM config file), parse entirely as context
              default_vdom = data.get('vdom_name') or 'root'
-             if data.get('vdom_name') and data.get('vdom_name') not in data['config_data']['vdoms']:
-                 data['config_data']['vdoms'].append(data.get('vdom_name'))
+             # default_vdom was already added to vdoms list earlier if detected from header/interfaces
              ConfigParserService._parse_vdom_objects(content, default_vdom, data)
 
         return data

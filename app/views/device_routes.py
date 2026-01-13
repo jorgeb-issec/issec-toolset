@@ -107,14 +107,12 @@ def import_device_config():
                 # We do not overwrite 'nombre' to preserve user custom alias if set, 
                 # unless it matches the old serial/hostname? Let's keep it simple and just update tech specs.
                 
-                # Sync VDOMs for existing
-                if data['config_data'].get('vdoms'):
-                     existing_vdoms = g.tenant_session.query(VDOM).filter_by(device_id=existing_device.id).all()
-                     existing_names = {v.name for v in existing_vdoms}
-                     for v_name in data['config_data']['vdoms']:
-                        if v_name not in existing_names:
-                             new_vdom = VDOM(device_id=existing_device.id, name=v_name, comments="Imported from Global Config")
-                             g.tenant_session.add(new_vdom)
+                # Sync VDOMs and Objects into DB
+                success, msg = ConfigLoaderService.load_config(existing_device.id, data['config_data'], g.tenant_session)
+                if not success:
+                     flash(f"Equipo actualizado, pero hubo errores cargando detalles: {msg}", "warning")
+                else: 
+                     flash(f"Equipo {existing_device.hostname} actualizado correctamente.", "success")
                 
                 g.tenant_session.commit()
                 flash(f"Equipo {existing_device.hostname} actualizado con la nueva configuración.", "info")
@@ -280,11 +278,7 @@ def import_new_vdom(device_id):
             
             vdom_name = data.get('vdom_name')
             
-            # Fallback: if header didn't have name, try to ask user via prompt? 
-            # or usage of filename? 
-            # For now, require header or user form input (if we had one).
-            # But we are using a simple file upload. 
-            # Let's check if form has a name input override.
+            # Fallback: if header didn't have name, try user form input
             if not vdom_name:
                 vdom_name = request.form.get('vdom_name_override')
             
@@ -301,22 +295,48 @@ def import_new_vdom(device_id):
             if not vdom_name:
                 flash("No se pudo detectar el nombre del VDOM en el archivo. Use 'Agregar Manual' primero.", "warning")
                 return redirect(url_for('device.view_device', device_id=device_id))
+            
+            # Get device and update its config_data
+            device = g.tenant_session.query(Equipo).get(device_id)
+            if not device:
+                flash("Equipo no encontrado", "danger")
+                return redirect(url_for('device.list_devices'))
+            
+            # Merge parsed config into device's config_data
+            parsed_config = data.get('config_data', {})
+            current_config = device.config_data or {}
+            
+            # Merge interfaces (add new ones, update existing)
+            existing_interfaces = {i.get('name'): i for i in current_config.get('interfaces', [])}
+            for intf in parsed_config.get('interfaces', []):
+                existing_interfaces[intf.get('name')] = intf
+            current_config['interfaces'] = list(existing_interfaces.values())
+            
+            # Merge VDOMs list
+            existing_vdoms = set(current_config.get('vdoms', []))
+            for v in parsed_config.get('vdoms', []):
+                existing_vdoms.add(v)
+            current_config['vdoms'] = list(existing_vdoms)
+            
+            # Update device config_data
+            device.config_data = current_config
                 
             # Check/Create VDOM
             vdom = g.tenant_session.query(VDOM).filter_by(device_id=device_id, name=vdom_name).first()
             if not vdom:
                 vdom = VDOM(device_id=device_id, name=vdom_name, comments=f"Imported from {file.filename}")
                 g.tenant_session.add(vdom)
-                # We need to commit to get ID if needed, or just let session handle it.
+                g.tenant_session.flush()  # Get VDOM ID before loading config
             
-            vdom.config_data = data.get('config_data')
+            vdom.config_data = parsed_config
             
-            # Sync DB objects
-            ConfigLoaderService.load_config(device_id, data['config_data'], g.tenant_session)
-
-            g.tenant_session.commit()
+            # Sync DB objects (interfaces, addresses, services, policies)
+            success, msg = ConfigLoaderService.load_config(device_id, parsed_config, g.tenant_session)
             
-            flash(f"VDOM '{vdom_name}' importado exitosamente.", "success")
+            if not success:
+                flash(f"VDOM importado pero hubo errores cargando objetos: {msg}", "warning")
+            else:
+                flash(f"VDOM '{vdom_name}' importado exitosamente con {len(parsed_config.get('interfaces', []))} interfaces, {len(parsed_config.get('policies', []))} políticas.", "success")
                  
         except Exception as e:
             flash(f"Error importando VDOM: {str(e)}", "danger")
@@ -398,6 +418,49 @@ def edit_vdom(vdom_id):
     
     flash("VDOM actualizado correctamente", "success")
     return redirect(request.referrer)
+
+@device_bp.route('/admin/devices/vdom/<uuid:vdom_id>/delete', methods=['POST'])
+@login_required
+@company_required
+def delete_vdom(vdom_id):
+    """Delete a VDOM and all its related objects (interfaces, policies, etc.)"""
+    vdom = g.tenant_session.query(VDOM).get(vdom_id)
+    if not vdom:
+        flash("VDOM no encontrado", "danger")
+        return redirect(request.referrer or url_for('device.list_devices'))
+    
+    device_id = vdom.device_id
+    vdom_name = vdom.name
+    
+    try:
+        # Delete related objects first (if not cascade)
+        # The VDOM model has cascade="all, delete-orphan" on relationships
+        # But we need to delete objects that reference vdom_id
+        
+        from app.models.interface import Interface
+        from app.models.address_object import AddressObject
+        from app.models.service_object import ServiceObject
+        from app.models.policy import Policy
+        
+        # Delete policies first (they have mappings that cascade)
+        g.tenant_session.query(Policy).filter_by(vdom_id=vdom_id).delete(synchronize_session=False)
+        
+        # Delete objects
+        g.tenant_session.query(Interface).filter_by(vdom_id=vdom_id).delete(synchronize_session=False)
+        g.tenant_session.query(AddressObject).filter_by(vdom_id=vdom_id).delete(synchronize_session=False)
+        g.tenant_session.query(ServiceObject).filter_by(vdom_id=vdom_id).delete(synchronize_session=False)
+        
+        # Delete VDOM itself
+        g.tenant_session.delete(vdom)
+        g.tenant_session.commit()
+        
+        flash(f"VDOM '{vdom_name}' eliminado correctamente junto con sus objetos asociados.", "success")
+    except Exception as e:
+        g.tenant_session.rollback()
+        flash(f"Error eliminando VDOM: {str(e)}", "danger")
+    
+    return redirect(url_for('device.view_device', device_id=device_id))
+
 
 @device_bp.route('/admin/devices/<uuid:device_id>/refresh', methods=['POST'])
 @login_required

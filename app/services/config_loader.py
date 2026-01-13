@@ -81,7 +81,8 @@ class ConfigLoaderService:
         # Ideally we update existing by name+vdom, delete missing.
         
         current_interfaces = session.query(Interface).filter_by(device_id=device.id).all()
-        current_map = {(i.name, i.vdom_id): i for i in current_interfaces}
+        # Interface names are unique per device, regardless of VDOM.
+        current_map = {i.name: i for i in current_interfaces}
         
         parsed_interfaces = data.get('interfaces', [])
         seen_keys = set()
@@ -91,7 +92,7 @@ class ConfigLoaderService:
             vdom_id = vdom_map.get(vdom_name)
             if not vdom_id: continue # Should not happen if _sync_vdoms works
             
-            key = (intf.get('name'), vdom_id)
+            key = intf.get('name')
             seen_keys.add(key)
             
             # Calculate allowaccess
@@ -101,6 +102,7 @@ class ConfigLoaderService:
             if key in current_map:
                 # Update
                 obj = current_map[key]
+                obj.vdom_id = vdom_id  # Update VDOM just in case it moved
                 obj.ip_address = intf.get('ip')
                 obj.status = intf.get('status', 'up')
                 obj.type = intf.get('type', 'physical')
@@ -120,6 +122,7 @@ class ConfigLoaderService:
                     config_data=intf
                 )
                 session.add(new_intf)
+                current_map[key] = new_intf # Prevent duplicate inserts if same key repeats in input
 
     @staticmethod
     def _sync_address_objects(device, vdom_map, data, session):
@@ -165,6 +168,7 @@ class ConfigLoaderService:
                     config_data={'raw': obj_data.get('raw_config')}
                 )
                 session.add(new_obj)
+                current_map[key] = new_obj # Prevent duplicates
 
     @staticmethod
     def _sync_service_objects(device, vdom_map, data, session):
@@ -206,6 +210,7 @@ class ConfigLoaderService:
                     config_data={'raw': obj_data.get('raw_config', '')}
                 )
                 session.add(new_obj)
+                current_map[key] = new_obj # Prevent duplicates
 
     @staticmethod
     def _sync_policies(device, vdom_map, data, session):
@@ -215,52 +220,61 @@ class ConfigLoaderService:
         
         current_policies = session.query(Policy).filter_by(device_id=device.id).all()
         current_map = {(str(p.policy_id), p.vdom_id): p for p in current_policies}
+        uuid_map = {str(p.uuid): p for p in current_policies if p.uuid}
         
         parsed_policies = data.get('policies', [])
         
-        # We also need to Resolve Object References for Mappings.
-        # This requires querying the DB for the objects we just synced.
-        # Performance might be an issue if we query for every policy.
-        # Better: Load all objects for this device into memory maps.
-        
+        # We also need to Resolve Object References for Mappings...
+        # [Skipped context - assuming maps are loaded below, focusing on Policy loop]
         # Reload objects to get IDs
         all_addrs = session.query(AddressObject).filter_by(device_id=device.id).all()
         addr_map = {(a.name, a.vdom_id): a for a in all_addrs}
-        # Also need to match "global" objects? usually objects are vdom specific.
         
         all_svcs = session.query(ServiceObject).filter_by(device_id=device.id).all()
         svc_map = {(s.name, s.vdom_id): s for s in all_svcs}
         
         all_intfs = session.query(Interface).filter_by(device_id=device.id).all()
-        intf_map = {(i.name, i.vdom_id): i for i in all_intfs}
+        # Interface map keyed by name as per previous fix
+        intf_map = {i.name: i for i in all_intfs}
 
         for poly_data in parsed_policies:
             vdom_name = poly_data.get('vdom', 'root')
             vdom_id = vdom_map.get(vdom_name)
             pid = str(poly_data.get('id'))
+            uuid_val = poly_data.get('uuid')
             
             key = (pid, vdom_id)
             
             p_obj = None
-            if key in current_map:
+            
+            # 1. Search by UUID (Strongest match)
+            if uuid_val and uuid_val in uuid_map:
+                p_obj = uuid_map[uuid_val]
+            # 2. Search by ID+VDOM (Fallback)
+            elif key in current_map:
                 p_obj = current_map[key]
+                
+            if p_obj:
                 # Update basic fields
+                p_obj.vdom_id = vdom_id # Update VDOM in case it changed
                 p_obj.name = poly_data.get('name')
                 p_obj.action = poly_data.get('action')
                 p_obj.status = poly_data.get('status')
-                p_obj.uuid = poly_data.get('uuid')
+                p_obj.uuid = uuid_val if uuid_val else p_obj.uuid
                 p_obj.raw_data = poly_data
                 
-                # Clear existing mappings (we will rebuild them)
-                # p_obj.src_interfaces = [] # If using relationships
-                # But we are using the mapping tables manually usually?
-                # Actually, if we use the relationship backrefs (interface_mappings etc), we can just assign list of objects?
-                # app/models/policy.py doesn't show direct many-to-many relationships to objects, only the mapping tables exists.
-                # Wait, Policy model has `src_addrs`, `dst_addrs` as mappings? 
-                # Let's check `policy_mappings.py` again.
-                # It usually sets up relationships. If `backref` is set, we can append to `p_obj.src_addresses` etc?
-                # Need to verify the relationship names.
-                pass
+                # Clear existing mappings manually
+                # We will re-add them below.
+                # Since relationships are dynamic/lazy, we can't just list clear.
+                # We need to delete from the mapping tables.
+                # Or rely on efficient upsert? No, duplicates in mappings.
+                # Best: Session delete mappings for this policy.
+                # But we don't have mapping objects loaded.
+                
+                # Deleting mappings via SQL query is fastest?
+                # session.query(PolicyInterfaceMapping).filter_by(policy_uuid=p_obj.uuid).delete()
+                # But we need imports.
+                pass 
             else:
                 p_obj = Policy(
                     device_id=device.id,
@@ -269,11 +283,23 @@ class ConfigLoaderService:
                     name=poly_data.get('name'),
                     action=poly_data.get('action'),
                     status=poly_data.get('status'),
-                    uuid=poly_data.get('uuid'),
+                    uuid=uuid_val,
                     raw_data=poly_data
                 )
                 session.add(p_obj)
-                session.flush() # Need ID for mappings
+                session.flush() # Need ID/UUID
+                
+            # Clear mappings for this policy to avoid duplicates
+            # We can use the relationships if cascade delete-orphan is set?
+            # Policy.interface_mappings is cascade='all, delete-orphan'.
+            # So if we do p_obj.interface_mappings = [], it should work?
+            # But relationships are dynamic query.
+            # p_obj.interface_mappings.delete() # works for dynamic check
+            if p_obj.uuid: # Only if persisted/flushed
+                 # Clear existing mappings using session.query
+                 session.query(PolicyInterfaceMapping).filter_by(policy_uuid=p_obj.uuid).delete(synchronize_session=False)
+                 session.query(PolicyAddressMapping).filter_by(policy_uuid=p_obj.uuid).delete(synchronize_session=False)
+                 session.query(PolicyServiceMapping).filter_by(policy_uuid=p_obj.uuid).delete(synchronize_session=False)
             
             # Now Handle Mappings
             
@@ -290,16 +316,30 @@ class ConfigLoaderService:
                 # If it's a default object not in config, we might miss it.
                 return None
 
+            def find_intf_id(name, vdom_id):
+                if (name, vdom_id) in intf_map:
+                    return intf_map[(name, vdom_id)].id
+                # Search in root?
+                root_id = vdom_map.get('root')
+                if root_id and (name, root_id) in intf_map:
+                    return intf_map[(name, root_id)].id
+                return None
+
             # --- Interfaces ---
             # srcintf
             for iname in poly_data.get('srcintf', []):
                 # if iname is 'any' or 'all'? Fortigate uses 'any'.
-                mapping = PolicyInterfaceMapping(policy=p_obj, interface_name=iname, direction='src')
-                session.add(mapping)
+                iid = find_intf_id(iname, vdom_id)
+                if iid:
+                    mapping = PolicyInterfaceMapping(policy=p_obj, interface_id=iid, direction='src')
+                    session.add(mapping)
+                    
             # dstintf
             for iname in poly_data.get('dstintf', []):
-                mapping = PolicyInterfaceMapping(policy=p_obj, interface_name=iname, direction='dst')
-                session.add(mapping)
+                iid = find_intf_id(iname, vdom_id)
+                if iid:
+                    mapping = PolicyInterfaceMapping(policy=p_obj, interface_id=iid, direction='dst')
+                    session.add(mapping)
                 
             # --- Addresses ---
             # srcaddr

@@ -243,8 +243,8 @@
                     </td>
 
                     <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-                        title="{{ p.src_intf }}">
-                        <small class="badge bg-dark">{{ p.src_intf|truncate(15) }}</small>
+                        title="{{ p.src_intf or '' }}">
+                        <small class="badge bg-dark">{{ (p.src_intf or '-')|truncate(15) }}</small>
                     </td>
 
                     <td class="text-truncate" style="overflow: hidden;" title="{{ p.src_addr }}">
@@ -252,8 +252,8 @@
                     </td>
 
                     <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-                        title="{{ p.dst_intf }}">
-                        <small class="badge bg-secondary">{{ p.dst_intf|truncate(15) }}</small>
+                        title="{{ p.dst_intf or '' }}">
+                        <small class="badge bg-secondary">{{ (p.dst_intf or '-')|truncate(15) }}</small>
                     </td>
 
                     <td class="text-truncate" style="overflow: hidden;">

@@ -469,7 +469,6 @@
                                     title="Editar Detalles">
                                     <i class="bi bi-pencil"></i>
                                 </button>
-                                <span class="badge bg-light text-muted border">ID: {{ v.id }}</span>
                                 <form action="{{ url_for('device.import_vdom_config', vdom_id=v.id) }}" method="POST"
                                     enctype="multipart/form-data" class="d-inline-flex">
                                     <label class="btn btn-sm btn-outline-secondary" title="Importar Config VDOM">
@@ -477,6 +476,11 @@
                                         <input type="file" name="config_file" hidden onchange="this.form.submit()">
                                     </label>
                                 </form>
+                                <button class="btn btn-sm btn-outline-danger"
+                                    onclick='confirmDeleteVDOM({{ v.id|tojson }}, {{ v.name|tojson }})'
+                                    title="Eliminar VDOM">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -646,6 +650,38 @@
     </div>
 </div>
 
+<!-- Modal Delete VDOM Confirmation -->
+<div class="modal fade" id="deleteVDOMModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form id="deleteVDOMForm" method="POST">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2"></i>Eliminar VDOM</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>¡Atención!</strong> Esta acción eliminará permanentemente:
+                        <ul class="mb-0 mt-2">
+                            <li>El VDOM y su configuración</li>
+                            <li>Todas las interfaces asociadas</li>
+                            <li>Todos los objetos de dirección</li>
+                            <li>Todos los objetos de servicio</li>
+                            <li>Todas las políticas de firewall</li>
+                        </ul>
+                    </div>
+                    <p>¿Está seguro de que desea eliminar el VDOM <strong id="delete_vdom_name_display"></strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Eliminar VDOM</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
     function editVDOM(id, name, comments) {
         document.getElementById('edit_vdom_name').value = name;
@@ -655,6 +691,16 @@
         form.action = '/admin/devices/vdom/' + id + '/edit';
 
         var modal = new bootstrap.Modal(document.getElementById('editVDOMModal'));
+        modal.show();
+    }
+
+    function confirmDeleteVDOM(id, name) {
+        document.getElementById('delete_vdom_name_display').textContent = name;
+
+        var form = document.getElementById('deleteVDOMForm');
+        form.action = '/admin/devices/vdom/' + id + '/delete';
+
+        var modal = new bootstrap.Modal(document.getElementById('deleteVDOMModal'));
         modal.show();
     }
 </script>
