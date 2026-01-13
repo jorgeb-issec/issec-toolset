@@ -204,8 +204,11 @@ class ConfigParserService:
                 # Parse objects in this section
                 ConfigParserService._parse_vdom_objects(section, current_vdom, data)
         else:
-             # No VDOM structure found, parse entirely as root
-             ConfigParserService._parse_vdom_objects(content, 'root', data)
+             # No VDOM structure found, parse entirely as context
+             default_vdom = data.get('vdom_name') or 'root'
+             if data.get('vdom_name') and data.get('vdom_name') not in data['config_data']['vdoms']:
+                 data['config_data']['vdoms'].append(data.get('vdom_name'))
+             ConfigParserService._parse_vdom_objects(content, default_vdom, data)
 
         return data
 

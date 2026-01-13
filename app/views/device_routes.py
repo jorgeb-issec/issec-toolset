@@ -243,6 +243,10 @@ def import_vdom_config(vdom_id):
             vdom = g.tenant_session.query(VDOM).get(vdom_id)
             if vdom:
                 vdom.config_data = data.get('config_data')
+                
+                # Sync DB objects
+                ConfigLoaderService.load_config(vdom.device_id, data['config_data'], g.tenant_session)
+                
                 g.tenant_session.commit()
                 flash(f"Configuración importada para VDOM {vdom.name}", "success")
             else:
@@ -306,6 +310,10 @@ def import_new_vdom(device_id):
                 # We need to commit to get ID if needed, or just let session handle it.
             
             vdom.config_data = data.get('config_data')
+            
+            # Sync DB objects
+            ConfigLoaderService.load_config(device_id, data['config_data'], g.tenant_session)
+
             g.tenant_session.commit()
             
             flash(f"VDOM '{vdom_name}' importado exitosamente.", "success")

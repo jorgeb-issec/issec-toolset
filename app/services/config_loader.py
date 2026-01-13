@@ -249,7 +249,7 @@ class ConfigLoaderService:
                 p_obj.action = poly_data.get('action')
                 p_obj.status = poly_data.get('status')
                 p_obj.uuid = poly_data.get('uuid')
-                p_obj.raw_config = poly_data.get('raw_config')
+                p_obj.raw_data = poly_data
                 
                 # Clear existing mappings (we will rebuild them)
                 # p_obj.src_interfaces = [] # If using relationships
@@ -270,7 +270,7 @@ class ConfigLoaderService:
                     action=poly_data.get('action'),
                     status=poly_data.get('status'),
                     uuid=poly_data.get('uuid'),
-                    raw_config=poly_data.get('raw_config')
+                    raw_data=poly_data
                 )
                 session.add(p_obj)
                 session.flush() # Need ID for mappings
